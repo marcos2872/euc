@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,29 +19,41 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import world.euc.app.tour.RecordingUiState
 import world.euc.app.tour.TourRecorder
@@ -47,6 +62,7 @@ import world.euc.app.tour.TourStore
 import world.euc.app.tour.TourSummary
 import world.euc.app.tour.formatDuration
 import world.euc.app.ui.components.SectionCard
+import java.io.File
 import java.util.Locale
 
 /**
@@ -66,6 +82,10 @@ fun ToursScreen(
     var tours by remember { mutableStateOf<List<TourSummary>>(emptyList()) }
     var refreshKey by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(emptySet<String>()) }
+    var confirmDeleteSelection by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(refreshKey, recording.recording) {
         tours = withContext(Dispatchers.IO) { store.list() }
@@ -142,12 +162,174 @@ fun ToursScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
+                SelectionHeader(
+                    selecting = selectionMode,
+                    total = tours.size,
+                    selectedCount = selectedIds.size,
+                    onToggleAll = {
+                        selectedIds = if (selectedIds.size == tours.size) {
+                            emptySet()
+                        } else {
+                            tours.map { it.id }.toSet()
+                        }
+                    },
+                    onShare = { shareTours(context, scope, store, selectedIds) },
+                    onDelete = { confirmDeleteSelection = true },
+                    onCancel = {
+                        selectionMode = false
+                        selectedIds = emptySet()
+                    },
+                    onStartSelecting = { selectionMode = true },
+                )
                 tours.forEachIndexed { index, tour ->
                     if (index > 0) HorizontalDivider()
-                    TourRow(tour = tour, onClick = { onOpenTour(tour.id) })
+                    TourRow(
+                        tour = tour,
+                        selecting = selectionMode,
+                        selected = tour.id in selectedIds,
+                        onClick = {
+                            if (selectionMode) {
+                                selectedIds = if (tour.id in selectedIds) {
+                                    selectedIds - tour.id
+                                } else {
+                                    selectedIds + tour.id
+                                }
+                            } else {
+                                onOpenTour(tour.id)
+                            }
+                        },
+                        onLongClick = {
+                            selectionMode = true
+                            selectedIds = selectedIds + tour.id
+                        },
+                    )
                 }
             }
         }
+    }
+
+    if (confirmDeleteSelection) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteSelection = false },
+            title = { Text("Apagar ${selectedIds.size} passeio(s)?") },
+            text = { Text("Os arquivos serão apagados do aparelho. Não dá para desfazer.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDeleteSelection = false
+                        val ids = selectedIds
+                        scope.launch {
+                            withContext(Dispatchers.IO) { ids.forEach { store.delete(it) } }
+                            selectedIds = emptySet()
+                            selectionMode = false
+                            refreshKey++
+                        }
+                    },
+                ) { Text("Apagar") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteSelection = false }) { Text("Cancelar") }
+            },
+        )
+    }
+}
+
+/**
+ * Cabeçalho do histórico: fora da seleção mostra a contagem e o botão
+ * "Selecionar"; em seleção mostra "Todos", quantos estão marcados e as ações.
+ */
+@Composable
+private fun SelectionHeader(
+    selecting: Boolean,
+    total: Int,
+    selectedCount: Int,
+    onToggleAll: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+    onCancel: () -> Unit,
+    onStartSelecting: () -> Unit,
+) {
+    if (!selecting) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "$total passeio(s)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onStartSelecting) {
+                Icon(Icons.Default.SelectAll, contentDescription = null)
+                Text("  Selecionar")
+            }
+        }
+        return
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onToggleAll) {
+            Text(if (selectedCount == total) "Nenhum" else "Todos")
+        }
+        Text(
+            "$selectedCount de $total",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onShare, enabled = selectedCount > 0) {
+            Icon(Icons.Default.Share, contentDescription = "Compartilhar selecionados")
+        }
+        TextButton(onClick = onDelete, enabled = selectedCount > 0) {
+            Icon(Icons.Default.Delete, contentDescription = "Apagar selecionados")
+        }
+        IconButton(onClick = onCancel) {
+            Icon(Icons.Default.Close, contentDescription = "Sair da seleção")
+        }
+    }
+}
+
+/** Exporta os passeios escolhidos em CSV e manda para o compartilhamento do Android. */
+private fun shareTours(
+    context: Context,
+    scope: CoroutineScope,
+    store: TourStore,
+    ids: Set<String>,
+) {
+    if (ids.isEmpty()) return
+    scope.launch {
+        val files = withContext(Dispatchers.IO) {
+            ids.mapNotNull { id ->
+                store.load(id)?.let { tour ->
+                    runCatching { store.exportCsv(tour, File(context.cacheDir, "${tour.id}.csv")) }
+                        .getOrNull()
+                }
+            }
+        }
+        if (files.isEmpty()) return@launch
+        val uris = ArrayList(
+            files.map { FileProvider.getUriForFile(context, "${context.packageName}.files", it) },
+        )
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_STREAM, uris.first())
+            }
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_STREAM, uris)
+            }
+        }.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        context.startActivity(Intent.createChooser(intent, "Compartilhar passeios"))
     }
 }
 
@@ -265,14 +447,25 @@ private fun LiveStat(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TourRow(tour: TourSummary, onClick: () -> Unit) {
+private fun TourRow(
+    tour: TourSummary,
+    selecting: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (selecting) {
+            Checkbox(checked = selected, onCheckedChange = { onClick() })
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(tour.name, style = MaterialTheme.typography.bodyLarge)
             Text(
@@ -296,8 +489,10 @@ private fun TourRow(tour: TourSummary, onClick: () -> Unit) {
                 )
             }
         }
-        OutlinedButton(onClick = onClick) {
-            Icon(Icons.Default.ChevronRight, contentDescription = "Abrir passeio")
+        if (!selecting) {
+            OutlinedButton(onClick = onClick) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "Abrir passeio")
+            }
         }
     }
 }
