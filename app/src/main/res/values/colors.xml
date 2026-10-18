@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#E65100</color>
+    <!-- Fundo da janela: evita clarão branco enquanto o Compose não desenha.
+         O tema escuro é o padrão; o claro/AMOLED vêm do Compose. -->
+    <color name="euc_window_background">#F6F8FB</color>
+    <color name="ic_launcher_background">#070B10</color>
 </resources>
