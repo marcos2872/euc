@@ -126,6 +126,12 @@ class InmotionV2Session(
             _events.tryEmit(SessionEvent.FirmwareReceived(versions))
         }
         settingsParser.parse(frame)?.let { settings ->
+            config.logger?.invoke(
+                "settings parseados: limite=${settings.speedLimitKmh} tilt=${settings.pedalTiltDegrees} " +
+                    "sensibilidade=${settings.pedalSensitivityPercent} volume=${settings.speakerVolumePercent} " +
+                    "split=${settings.splitRidingAccelerationPercent}/${settings.splitRidingBrakingPercent} " +
+                    "splitAtivo=${settings.splitRidingModesEnabled} tiltEstendido=${settings.extendedLateralTiltLimit}",
+            )
             _events.tryEmit(SessionEvent.SettingsReceived(settings))
         }
     }
