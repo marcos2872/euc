@@ -1,0 +1,43 @@
+# ============================================================
+# euc — projeto pessoal (app de monociclo elétrico)
+# ============================================================
+
+# --- Artefatos que NÃO devem ser versionados ---
+# APKs analisados (binários de terceiros, grandes)
+binario/
+
+# Análises de engenharia reversa (evidências REA, código
+# descompilado, catálogos gerados) — material de trabalho local
+analysis/
+
+# Configuração local do agente/MCP (caminhos e toolchain da máquina)
+opencode.jsonc
+
+# Skills instaladas localmente (não fazem parte do projeto)
+.agents/
+
+# --- Android / Kotlin (app) ---
+*.apk
+*.aab
+*.apks
+*.xapk
+*.jks
+*.keystore
+.gradle/
+build/
+captures/
+.cxx/
+.externalNativeBuild/
+local.properties
+.idea/
+*.iml
+
+# --- Sistema / editores ---
+.DS_Store
+Thumbs.db
+*~
+*.swp
+
+# --- Segredos / ambiente ---
+.env
+.env.*
