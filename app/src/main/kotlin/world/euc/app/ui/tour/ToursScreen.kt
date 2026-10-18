@@ -92,6 +92,7 @@ fun ToursScreen(
         if (recording.recording) {
             RecordingCard(
                 state = recording,
+                onOpenLocationSettings = { openLocationSettings(context) },
                 onStop = {
                     recorder.stop()
                     TourRecordingService.stop(context)
@@ -109,10 +110,11 @@ fun ToursScreen(
                     .fillMaxWidth()
                     .height(300.dp),
                 followLast = true,
+                fallbackCenter = recording.lastFix?.let { LatLon(it.latitude, it.longitude) },
             )
         } else {
             StartCard(
-                gpsEnabled = recording.gpsEnabled,
+                locationEnabled = recording.locationEnabled,
                 onStart = {
                     if (hasLocationPermission(context)) {
                         startRecording(context, recorder)
@@ -150,7 +152,7 @@ fun ToursScreen(
 }
 
 @Composable
-private fun StartCard(gpsEnabled: Boolean, onStart: () -> Unit) {
+private fun StartCard(locationEnabled: Boolean, onStart: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -163,9 +165,9 @@ private fun StartCard(gpsEnabled: Boolean, onStart: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (!gpsEnabled) {
+            if (!locationEnabled) {
                 Text(
-                    "O GPS do aparelho está desligado — ligue para registrar o percurso.",
+                    "A localização do aparelho está desligada — ligue para registrar o percurso.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -183,6 +185,7 @@ private fun RecordingCard(
     state: RecordingUiState,
     onStop: () -> Unit,
     onDiscard: () -> Unit,
+    onOpenLocationSettings: () -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -225,18 +228,19 @@ private fun RecordingCard(
             }
 
             Text(
-                text = when {
-                    !state.gpsEnabled -> "GPS desligado — o percurso não está sendo registrado"
-                    state.gpsLost -> "Sem sinal de GPS no momento"
-                    else -> "GPS ativo"
-                },
+                text = locationStatus(state),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (state.gpsLost) {
+                color = if (state.gpsLost || !state.locationEnabled) {
                     MaterialTheme.colorScheme.error
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
+            if (!state.locationEnabled) {
+                OutlinedButton(onClick = onOpenLocationSettings) {
+                    Text("Abrir ajustes de localização")
+                }
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onStop) {
@@ -296,6 +300,32 @@ private fun TourRow(tour: TourSummary, onClick: () -> Unit) {
             Icon(Icons.Default.ChevronRight, contentDescription = "Abrir passeio")
         }
     }
+}
+
+/**
+ * Texto de estado da localização, do mais grave ao normal: sem localização no
+ * aparelho, sem fix nenhum, sinal fraco (rede ou GPS impreciso) e GPS bom.
+ */
+private fun locationStatus(state: RecordingUiState): String {
+    val fix = state.lastFix
+    return when {
+        !state.locationEnabled ->
+            "Localização desligada no aparelho — o percurso não está sendo registrado"
+        fix == null ->
+            "Procurando sinal de GPS… (em locais fechados o sinal não chega)"
+        state.gpsLost ->
+            "Sem sinal de GPS no momento"
+        !state.hasAccurateSignal ->
+            "Sinal fraco (±${fix.accuracyM?.toInt() ?: "?"} m) — o percurso precisa de céu aberto"
+        else ->
+            "GPS ativo (±${fix.accuracyM?.toInt() ?: "?"} m)"
+    }
+}
+
+private fun openLocationSettings(context: Context) {
+    val intent = android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+    runCatching { context.startActivity(intent) }
 }
 
 private fun hasLocationPermission(context: Context): Boolean =

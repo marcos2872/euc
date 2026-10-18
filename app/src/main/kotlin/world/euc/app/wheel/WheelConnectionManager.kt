@@ -148,8 +148,10 @@ class WheelConnectionManager(context: Context) {
 
     /** Define o limite de velocidade (tiltback), em km/h. */
     suspend fun setSpeedLimit(kmh: Double) {
-        send(InmotionV2Commands.speedTiltback(kmh))
-        updateSettings { it.copy(speedLimitKmh = kmh) }
+        val capabilities = _state.value.capabilities
+        val safe = kmh.coerceIn(capabilities.minSpeedLimitKmh, capabilities.maxSpeedLimitKmh)
+        send(InmotionV2Commands.speedTiltback(safe))
+        updateSettings { it.copy(speedLimitKmh = safe) }
     }
 
     /** Define a inclinação dos pedais, em graus. */
@@ -168,6 +170,9 @@ class WheelConnectionManager(context: Context) {
     suspend fun setRidingMode(mode: Int) {
         send(InmotionV2Commands.ridingMode(mode))
         updateSettings { it.copy(ridingMode = mode) }
+        // Releitura de cortesia: confirma o que a roda passou a reportar
+        // (o firmware pode ou não incluir o modo no quadro de configurações).
+        session?.poll(InmotionV2Commands.readSettings())
     }
 
     /** Liga/desliga os modos de condução separados. */
@@ -338,7 +343,8 @@ class WheelConnectionManager(context: Context) {
             }
             is SessionEvent.FirmwareReceived -> _state.update { it.copy(firmware = event.versions) }
             is SessionEvent.SettingsReceived -> {
-                _state.update { it.copy(settings = it.settings.mergedWith(event.settings)) }
+                val reported = sanitize(event.settings)
+                _state.update { it.copy(settings = it.settings.mergedWith(reported)) }
                 localSettingsStore.saveWheelSettings(_state.value.settings)
                 scope.launch { maybeReapplySettings() }
             }
@@ -353,6 +359,24 @@ class WheelConnectionManager(context: Context) {
             }
             is SessionEvent.AuthenticationCompleted -> _state.update { it.copy(authenticated = event.success) }
             is SessionEvent.CommandTimedOut -> Unit // observabilidade futura (log de depuração)
+        }
+    }
+
+    /**
+     * Descarta valores que não podem ser o que dizem ser.
+     *
+     * O firmware da V11y reporta o campo de limite de velocidade em unidades de
+     * 0,5 km/h (12000 = 60 km/h), o que o EUC World interpreta como 120 km/h —
+     * valor impossível para o modelo. Sem esse cuidado, o app mostraria 120 no
+     * ajuste e **gravaria** esse valor na roda ao reaplicar as configurações.
+     */
+    private fun sanitize(reported: WheelSettings): WheelSettings {
+        val max = _state.value.capabilities.maxSpeedLimitKmh
+        val limit = reported.speedLimitKmh
+        return if (limit != null && limit > max) {
+            reported.copy(speedLimitKmh = null)
+        } else {
+            reported
         }
     }
 

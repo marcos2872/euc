@@ -7,8 +7,9 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Fix de GPS já normalizado (sem depender do Android). */
+/** Fix de posição já normalizado (sem depender do Android). */
 data class GpsFix(
+    /** Horário do **aparelho** quando o fix chegou. */
     val timeMs: Long,
     val latitude: Double,
     val longitude: Double,
@@ -16,7 +17,17 @@ data class GpsFix(
     val altitudeM: Double? = null,
     val speedKmh: Double? = null,
     val bearingDegrees: Float? = null,
-)
+    /** Veio do GPS (preciso) ou do provedor de rede (aproximado)? */
+    val fromGps: Boolean = true,
+) {
+    /** Fix velho demais para contar como sinal ativo. */
+    fun isStale(nowMs: Long = System.currentTimeMillis()): Boolean =
+        nowMs - timeMs > STALE_AFTER_MS
+
+    companion object {
+        const val STALE_AFTER_MS = 10_000L
+    }
+}
 
 /** Estado da roda no instante de um fix, já reduzido ao que o passeio guarda. */
 data class TelemetrySnapshot(
@@ -39,9 +50,11 @@ data class TelemetrySnapshot(
 class TourTrackBuilder(
     private val maxAccuracyMeters: Double = 25.0,
     private val minMovementMeters: Double = 1.0,
+    private val minMovingSpeedKmh: Double = 2.0,
 ) {
     private val points = mutableListOf<TourPoint>()
     private var distanceKm = 0.0
+    private var lastKnownSpeedKmh: Double? = null
 
     val isEmpty: Boolean get() = points.isEmpty()
 
@@ -57,8 +70,9 @@ class TourTrackBuilder(
         val accuracy = fix.accuracyM?.toDouble()
         if (accuracy != null && accuracy > maxAccuracyMeters) return null
 
+        val rawSpeed = telemetry.speedKmh ?: fix.speedKmh
         val previous = points.lastOrNull()
-        if (previous != null) {
+        if (previous != null && isMoving(rawSpeed)) {
             val meters = haversineMeters(
                 previous.latitude,
                 previous.longitude,
@@ -83,10 +97,22 @@ class TourTrackBuilder(
             distanceKm = distanceKm,
         )
         points += point
+        if (rawSpeed != null) lastKnownSpeedKmh = rawSpeed
         return point
     }
 
     fun snapshot(): List<TourPoint> = points.toList()
+
+    /**
+     * Parado, o GPS oscila alguns metros por segundo — somar isso inventaria
+     * quilômetros parados. Como o EUC World, só soma deslocamento quando a
+     * velocidade passa de [minMovingSpeedKmh] (da roda ou do GPS); sem
+     * velocidade conhecida, soma (não há como saber se está parado).
+     */
+    private fun isMoving(speedKmh: Double?): Boolean {
+        val known = speedKmh ?: lastKnownSpeedKmh ?: return true
+        return known > minMovingSpeedKmh
+    }
 
     companion object {
         private const val EARTH_RADIUS_METERS = 6_371_000.0

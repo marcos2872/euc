@@ -71,6 +71,8 @@ fun TrackMap(
     modifier: Modifier = Modifier,
     followLast: Boolean = false,
     showZoomButtons: Boolean = true,
+    /** Posição para centralizar quando ainda não há pontos (fix aproximado). */
+    fallbackCenter: LatLon? = null,
 ) {
     val context = LocalContext.current
     val tiles = remember { mutableStateMapOf<String, ImageBitmap>() }
@@ -84,16 +86,17 @@ fun TrackMap(
     val trailColor = MaterialTheme.colorScheme.primary
 
     // Enquadramento inicial e acompanhamento do último ponto.
-    LaunchedEffect(points.size, viewport) {
+    LaunchedEffect(points.size, viewport, fallbackCenter) {
         if (viewport == IntSize.Zero) return@LaunchedEffect
-        val last = points.lastOrNull() ?: return@LaunchedEffect
+        val last = points.lastOrNull()
         if (center == null) {
             val bounds = TrackBounds.of(points)
             if (bounds != null) {
                 zoom = bounds.zoomFor(viewport, paddingPx = 48f)
             }
-            center = LatLon(last.latitude, last.longitude)
-        } else if (followLast && !userMoved) {
+            val target = last?.let { LatLon(it.latitude, it.longitude) } ?: fallbackCenter
+            if (target != null) center = target
+        } else if (followLast && !userMoved && last != null) {
             center = LatLon(last.latitude, last.longitude)
         }
     }

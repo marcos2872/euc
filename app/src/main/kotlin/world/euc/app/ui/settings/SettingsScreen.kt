@@ -89,7 +89,11 @@ fun SettingsScreen(
                 if (WheelSettingId.SPEED_LIMIT in capabilities) {
                     SliderRow(
                         label = "Limite de velocidade (tiltback)",
-                        value = (settings.speedLimitKmh ?: DEFAULT_SPEED_LIMIT).toFloat(),
+                        // O quadro de configurações da V11y traz esse campo em
+                        // unidades de 0,5 km/h (valor descartado); nesse caso vale
+                        // o que a telemetria reporta.
+                        value = (settings.speedLimitKmh ?: state.telemetry.speedLimitKmh
+                            ?: DEFAULT_SPEED_LIMIT).toFloat(),
                         valueRange = capabilities.minSpeedLimitKmh.toFloat()..
                             capabilities.maxSpeedLimitKmh.toFloat(),
                         unit = " km/h",

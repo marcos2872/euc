@@ -41,6 +41,13 @@ class InmotionV2SettingsParserTest {
     }
 
     @Test
+    fun `le o modo de conducao do bit 0 do byte de flags`() {
+        // Confirmado na V11y: 0x10 = Comfort, 0x11 = Sport (o resto dos bits não muda)
+        assertEquals(0, parser.parse(settingsFrame(modeFlags = 0x10))!!.ridingMode)
+        assertEquals(1, parser.parse(settingsFrame(modeFlags = 0x11))!!.ridingMode)
+    }
+
+    @Test
     fun `quadro curto devolve apenas os campos presentes`() {
         // Resposta com 14 bytes de dados: cobre velocidade e tilt, não o volume.
         val payload = ByteArray(2 + 14)
@@ -66,6 +73,7 @@ class InmotionV2SettingsParserTest {
 
     private fun settingsFrame(
         speedLimitRaw: Int = 0,
+        modeFlags: Int = 0x10,
         pedalTiltRaw: Int = 0,
         pedalSensitivity: Int = 0,
         splitAcceleration: Int = 0,
@@ -75,6 +83,7 @@ class InmotionV2SettingsParserTest {
     ): InmotionFrame {
         val data = ByteArray(40)
         putU16(data, 0, speedLimitRaw)
+        data[10] = modeFlags.toByte()
         putU16(data, 8, pedalTiltRaw)
         data[11] = pedalSensitivity.toByte()
         data[13] = splitAcceleration.toByte()

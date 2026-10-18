@@ -45,6 +45,18 @@ class TourTrackBuilderTest {
     }
 
     @Test
+    fun `parado nao soma a oscilacao do GPS`() {
+        val builder = TourTrackBuilder()
+
+        builder.add(fix(latitude = -23.5000000, timeMs = 1_000, speedKmh = 0.0), TelemetrySnapshot(speedKmh = 0.0))
+        // ~11 m de oscilação em um segundo, mas a roda está parada
+        builder.add(fix(latitude = -23.5001000, timeMs = 2_000, speedKmh = 0.0), TelemetrySnapshot(speedKmh = 0.0))
+
+        assertEquals(0.0, builder.currentDistanceKm)
+        assertEquals(2, builder.pointCount)
+    }
+
+    @Test
     fun `usa a velocidade da roda em vez da do GPS`() {
         val builder = TourTrackBuilder()
 

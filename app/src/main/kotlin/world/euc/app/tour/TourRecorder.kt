@@ -29,13 +29,25 @@ data class RecordingUiState(
     val pointCount: Int = 0,
     /** Pontos gravados até agora (para o mapa ao vivo). */
     val points: List<TourPoint> = emptyList(),
+    /** Localização ligada no aparelho (qualquer provedor). */
+    val locationEnabled: Boolean = true,
+    /** GPS do aparelho ligado? */
     val gpsEnabled: Boolean = true,
-    /** Idade do último fix de GPS, em ms (null = nenhum fix ainda). */
-    val lastFixAgeMs: Long? = null,
+    /** Último fix recebido (GPS ou rede) — usado para posicionar o mapa. */
+    val lastFix: GpsFix? = null,
     val wheelModel: String? = null,
 ) {
-    /** Sinal de GPS considerado perdido (sem fix há mais de 10 s). */
-    val gpsLost: Boolean get() = !gpsEnabled || lastFixAgeMs == null || lastFixAgeMs > 10_000
+    /** Idade do último fix, em ms (null = nenhum fix ainda). */
+    val lastFixAgeMs: Long?
+        get() = lastFix?.let { System.currentTimeMillis() - it.timeMs }
+
+    /** Nenhum sinal utilizável no momento. */
+    val gpsLost: Boolean
+        get() = !locationEnabled || lastFix == null || lastFix.isStale()
+
+    /** Sinal preciso o bastante para gravar a trilha (GPS e ±30 m). */
+    val hasAccurateSignal: Boolean
+        get() = lastFix?.let { it.fromGps && !it.isStale() && (it.accuracyM ?: 99f) <= 30f } == true
 
     val avgSpeedKmh: Double get() = Tour.averageSpeed(distanceKm, durationMs)
 
@@ -57,7 +69,7 @@ class TourRecorder(
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val _state = MutableStateFlow(RecordingUiState(gpsEnabled = gps.providerEnabled))
+    private val _state = MutableStateFlow(RecordingUiState(gpsEnabled = gps.gpsEnabled))
     val state: StateFlow<RecordingUiState> = _state.asStateFlow()
 
     private var builder = TourTrackBuilder()
@@ -95,7 +107,8 @@ class TourRecorder(
             recording = true,
             tourId = tourId,
             startedAtMs = startedAtMs,
-            gpsEnabled = gps.providerEnabled,
+            locationEnabled = gps.locationEnabled,
+            gpsEnabled = gps.gpsEnabled,
             wheelModel = wheelModel,
         )
 
@@ -125,7 +138,8 @@ class TourRecorder(
         val saved = runCatching { store.save(tour) }.isSuccess
         _state.value = RecordingUiState(
             recording = false,
-            gpsEnabled = gps.providerEnabled,
+            locationEnabled = gps.locationEnabled,
+            gpsEnabled = gps.gpsEnabled,
             wheelModel = wheelModel,
             pointCount = if (saved) tour.points.size else 0,
         )
@@ -138,7 +152,11 @@ class TourRecorder(
         cancelJobs()
         gps.release()
         id?.let { store.delete(it) }
-        _state.value = RecordingUiState(gpsEnabled = gps.providerEnabled, wheelModel = wheelModel)
+        _state.value = RecordingUiState(
+            locationEnabled = gps.locationEnabled,
+            gpsEnabled = gps.gpsEnabled,
+            wheelModel = wheelModel,
+        )
     }
 
     fun release() {
@@ -165,6 +183,8 @@ class TourRecorder(
         val now = System.currentTimeMillis()
         val points = builder.snapshot()
         val fix = gps.lastFix
+        // A localização pode ter sido ligada depois de começar a gravar.
+        gps.ensureRegistered()
         _state.update { current ->
             current.copy(
                 distanceKm = builder.currentDistanceKm,
@@ -173,8 +193,9 @@ class TourRecorder(
                 maxSpeedKmh = points.maxOfOrNull { it.speedKmh } ?: 0.0,
                 pointCount = points.size,
                 points = points,
-                gpsEnabled = gps.providerEnabled,
-                lastFixAgeMs = fix?.let { now - it.timeMs },
+                locationEnabled = gps.locationEnabled,
+                gpsEnabled = gps.gpsEnabled,
+                lastFix = fix,
                 wheelModel = wheelModel,
             )
         }

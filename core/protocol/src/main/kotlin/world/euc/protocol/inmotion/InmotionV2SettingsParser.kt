@@ -11,7 +11,8 @@ import world.euc.protocol.model.WheelSettings
  *
  * | Offset | Campo                          | Escala |
  * |--------|--------------------------------|--------|
- * | 0      | Limite de velocidade           | /100   |
+ * | 0      | Limite de velocidade*          | /100   |
+ * | 10     | bit 0: modo de condução (0 = Comfort, 1 = Sport) | — |
  * | 8      | Tilt dos pedais                | /100°  |
  * | 11     | Sensibilidade dos pedais       | %      |
  * | 13     | Split riding: aceleração       | %      |
@@ -38,6 +39,7 @@ class InmotionV2SettingsParser {
 
         return WheelSettings(
             speedLimitKmh = u16Le(data, OFFSET_SPEED_LIMIT)?.div(100.0),
+            ridingMode = u8(data, OFFSET_MODE_FLAGS)?.and(0x01),
             pedalTiltDegrees = i16Le(data, OFFSET_PEDAL_TILT)?.div(100.0),
             pedalSensitivityPercent = u8(data, OFFSET_PEDAL_SENSITIVITY),
             splitRidingAccelerationPercent = u8(data, OFFSET_SPLIT_ACCELERATION),
@@ -69,6 +71,9 @@ class InmotionV2SettingsParser {
         // O EUC World lê no payload (2, 10, 13, 15, 16, 17, 36); o eucplanet
         // documenta nos dados (0, 8, 11, 13, 14, 15, 34) — os dois batem.
         const val OFFSET_SPEED_LIMIT = 0
+
+        /** Byte de flags; bit 0 = modo de condução (0 = Comfort, 1 = Sport). */
+        const val OFFSET_MODE_FLAGS = 10
         const val OFFSET_PEDAL_TILT = 8
         const val OFFSET_PEDAL_SENSITIVITY = 11
         const val OFFSET_SPLIT_ACCELERATION = 13

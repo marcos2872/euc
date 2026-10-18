@@ -75,6 +75,15 @@ class InmotionV2Session(
         queue.send(QueuedCommand.Query(command))
     }
 
+    /**
+     * Enfileira uma consulta **sem esperar resposta dedicada** (a resposta é
+     * tratada ao chegar). Usada para releituras de cortesia, que não devem
+     * prender a fila se o firmware não responder.
+     */
+    suspend fun poll(command: InmotionCommand) {
+        queue.send(QueuedCommand.Poll(command))
+    }
+
     private suspend fun enqueueInitialization() {
         queue.send(QueuedCommand.Authenticate)
         query(InmotionV2Commands.readModel())
@@ -136,7 +145,8 @@ class InmotionV2Session(
         }
         settingsParser.parse(frame)?.let { settings ->
             config.logger?.invoke(
-                "settings parseados: limite=${settings.speedLimitKmh} tilt=${settings.pedalTiltDegrees} " +
+                "settings parseados: limite=${settings.speedLimitKmh} modo=${settings.ridingMode} " +
+                    "tilt=${settings.pedalTiltDegrees} " +
                     "sensibilidade=${settings.pedalSensitivityPercent} volume=${settings.speakerVolumePercent} " +
                     "split=${settings.splitRidingAccelerationPercent}/${settings.splitRidingBrakingPercent} " +
                     "splitAtivo=${settings.splitRidingModesEnabled} tiltEstendido=${settings.extendedLateralTiltLimit}",
