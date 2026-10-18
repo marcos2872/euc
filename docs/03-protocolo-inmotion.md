@@ -151,7 +151,7 @@ temps em `40-46`, state byte em `54`, light byte em `55`.
 | WRITE_SPEED_TILTBACK | `96 21 <u16 LE×100>` | m11192f1 | **Na V11y só funciona estendido**: `02 21 60 21 <u16 LE> 00 00` (tipo `0x16`) — validado em captura (30 → 35 → 60 km/h). O EUC World manda em framing padrão para a V11y e é ignorado |
 | WRITE_PEDAL_TILT | `96 22 <u16 LE>` | m11184Y0 | |
 | WRITE_PEDAL_SENSITIVITY | `96 25 <v> <v>` | m11183X0 | |
-| WRITE_RIDING_MODE | `96 23 <modo>` | m11187a1 | 1=classic, 0=comfort |
+| WRITE_RIDING_MODE | `96 23 <modo>` | m11187a1 | 1 = Sport (material comunitário chama de classic), 0 = Comfort |
 | WRITE_PERFORMANCE_MODE | `96 24 <0/1>` | m11186Z0 | |
 | WRITE_SPEAKER_VOLUME | `96 26 <0-100>` | m11190d1 | |
 | WRITE_STANDBY_TIMER | `96 28 <u16 seg>` | m11195i1 | |

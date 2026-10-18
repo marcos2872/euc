@@ -3,6 +3,10 @@
 > Base: extração do EUC World 2.66.0 (adaptadores, tabela de detecção, telas por modelo) +
 > documentação comunitária (eucplanet/MIT, WheelLog/GPL, eucWatch).
 > Objetivo: arquitetura que permita suportar **qualquer** monociclo, com o Inmotion V11y como caso piloto.
+>
+> **Docs de protocolo por marca (extração dos apps oficiais, out/2026):**
+> [inmotion](protocolos/inmotion.md) · [kingsong](protocolos/kingsong.md) · [begode](protocolos/begode.md) ·
+> [leaperkim](protocolos/leaperkim.md) · [nosfet](protocolos/nosfet.md)
 
 ## 1. Arquitetura multi-protocolo
 
@@ -60,7 +64,8 @@ data class GattChannels(
 | Framing `AA 55 … 5A 5A` (20 bytes) | KingSong |
 | Comandos de 1 byte ASCII + resposta `55 AA` | Gotway/Begode |
 | Framing `4C <cmd> 41 70 <len> <payload> <CRC32 BE>` | Veteran |
-| Framing `55 AA <len> <payload> <checksum>` | Ninebot (S2/A1/Z) |
+| Framing `55 AA <len> <src> <dst> <data> <crc16>` | Ninebot One E+/A1/S2 |
+| Framing `5A A5 <len> <src> <dst> <cmd> <param> <data> <crc16>` + XOR de 16 B | Ninebot One Z |
 | Reassembly de notificações BLE (frames partidos) | **todos** |
 
 ## 2. Detecção automática (tabela extraída do APK)
@@ -80,11 +85,18 @@ Tabela completa em `analysis/07-bt-definitions.txt`. Resumo:
 | `inmotion` | FFE0/FFE4 (notify) + FFE5/FFE9 (write) + legados | Inmotion V1 |
 | `inmotion_new_v1` | NUS `6e400001/2/3` | Inmotion V2 (V11+) |
 | `inmotion_new_v2` | NUS + FFE0/FFE5 (transporte duplo) | Inmotion V2 (firmwares com fallback) |
-| `inmotion_new_v3` | NUS + `AE00/AE01/AE02` | Inmotion V2 (modelos novos: V14/P6?) |
+| `inmotion_new_v3` | NUS + `AE00/AE01/AE02` | Inmotion V2 (modelos novos: V14/P6?) — ⚠️ interpretação alternativa: família `elephant` (AES) no app oficial; pendente de captura ([`protocolos/inmotion.md`](protocolos/inmotion.md)) |
 | `inmotion_new_ee` | NUS + FFF2 | Inmotion EE |
 | `ninebot` | FFE0/FFE1 | Ninebot (genérico) |
 | `ninebot_new_v1` | NUS + `FEE7` (FEC7/FEC8/FEC9) | Ninebot One S2/A1 |
 | `ninebot_new_v2` | NUS apenas | Ninebot One Z |
+
+Nomes BLE confirmados nos apps oficiais: Begode contém `GotWay`/`BEGODE`; LeaperKim começa com `LK`;
+Nosfet começa com `NF`; KingSong filtra `KS*`/`lamax`/`gt` (E1 identificada por `02 66 66` no advertising);
+Inmotion usa NUS (`lorin`/V2) ou FFE5/FFE9 (V1/`ezcan`).
+
+A tabela acima descreve as **BT definitions do EUC World** (serviços *esperados*); os apps oficiais usam
+subconjuntos (Begode e LeaperKim usam só `FFE0/FFE1`; KingSong `FFE0/FFE1` + fallback `AD00/AD01/AD02`).
 
 **Estratégia:** reproduzir a tabela como dados (JSON no app), com fallback: se nenhum match, tentar
 NUS → Inmotion V2; FFE0/FFE1 → perguntar marca; permitir **seleção manual** de protocolo/modelo.
@@ -100,6 +112,10 @@ NUS → Inmotion V2; FFE0/FFE1 → perguntar marca; permitir **seleção manual*
 - **Auth:** handshake `0x13` (obrigatório para lock em V12+).
 - **Modelos:** V11, V11Y, V12, V12S, V12 HS/HT/Pro, V13, V13 Pro, V14, V9, E20, P6.
 - **Fontes:** nosso `docs/03-protocolo-inmotion.md` + eucplanet (MIT) + WheelLog.
+- **App oficial 8.1.34 (Flutter/Dart 2.19.2):** protocolo em `libapp.so` do XAPK — 231 geradores `gen*Msg`
+  (69 de escrita), 3 famílias (`lorin`=V2, `ezcan`=V1, `elephant`=AES); o app oficial faz auth/PIN
+  (`genRequestEncryptedKeyMsg`/`genVerifyPwdMsg`); BMS nativo até 4 packs; V11Y é classe própria e
+  V9 não existe no app. Detalhes em [`protocolos/inmotion.md`](protocolos/inmotion.md).
 
 ### 3.2 Inmotion (V1 — V5/V8/V10/L6/Solowheel) — ✅ EXTRAÍDO
 - **Transporte:** write `FFE5/FFE9` (chunks 20 B), notify `FFE0/FFE4`.
@@ -113,50 +129,62 @@ NUS → Inmotion V2; FFE0/FFE1 → perguntar marca; permitir **seleção manual*
 - **PIN:** alguns firmwares exigem PIN de 6 dígitos (CAN `0x0F550307`).
 - **Fontes:** nosso APK + eucplanet V1 + WheelLog (`InMotionAdapter.java`).
 
-### 3.3 KingSong — 🟡 EXTRAÍDO (ops), comandos a detalhar
-- **Transporte:** `FFE0/FFE1` (v2 usa FFE1+FFE2), v3 com serviço proprietário `0783b03e…`.
-- **Framing:** `AA 55 …` 20 bytes com trailer `5A 5A` (RX valida `[0]==0xAA && [1]==0x55`).
-- **Ops (~90):** INIT_* (auto-off, battery names, bluetooth audio, charging limit, display content/mode,
-  headlight brightness/flashing, language, lateral tilt limit, LED colors, lift sensor (+mode), lock,
-  magic light (+mode), name, password, pedal tilt, serial, spectra light (+mode), speed alarms+tiltback),
-  READ_* correspondentes, WRITE_* (calibração, etc.), UPDATE_* (firmware + BMS).
-- **Modelos:** KS-14D/M/S, KS-16X, KS-18L/XL, KS-F1/F2/F18/F22/F22P, KS-N12P, KS-S2/S9/S16/S18/S19/S20/S22, GT16, Rockwheel (via KS).
-- **Fontes:** nosso APK + WheelLog (`KingSongAdapter.java`) + eucplanet.
-- **Nota:** o EUC World também atualiza firmware KingSong (ops UPDATE_*).
+### 3.3 KingSong — ✅ DOC COMPLETO
+- **Transporte:** `FFE0/FFE1` (write type 1 + notify), fallback `AD00/AD01/AD02`, DFU `02f00000-…-ff02`;
+  MTU 512, blocos de 20 B, fila com 50 ms entre pacotes, 3 retries/5 falhas, watchdog 1 s.
+- **Framing:** quadro de 20 B `AA 55 <16B> <tail>`; comando em `[16]`; formato clássico `[17]=0x14` + `5A 5A`,
+  formato novo com CRC-16/CCITT-FALSE (0x1021, init 0, BE) em `[18..19]`, ou soma 16-bit LE (NFC/luzes);
+  quadros de nome/serial com payload anexado.
+- **Comandos:** ~150 construtores em `defpackage.fx` (~90 ops nomeadas no EUC World): alarmes/tiltback
+  (0x85/0xA4/0xB5), farol (0x53/0x54/0x73), luzes (0x59/0x6C/0x6D/0x7D/0x8A/0x96/0x97), lock/senha
+  (0x5D/0x41/0xA5, algoritmo dos 6 dígitos extraído), lift sensor (0x7E/0x81), carga (0x8A sub 8/9),
+  display (0x1B/0x8A sub 10/11), pedal/lateral tilt, riding mode, BMS update (família `[16]=0x74`).
+- **Telemetria:** `0xA9` (tensão/velocidade/odômetro word-swapped u32/1000/corrente/temp/células), `0xB9`
+  (viagem/tempo/média/temps), `0xB1`/`0xBE`/`0xB3`/`0xBB`; família alternativa `F1 EF` (0xC2/0xC5/0xC9).
+- **BMS:** páginas `0xF1/0xF2` + `[17]` (BMS1_1..13, BMS2_1..13), 7 células u16 LE por página + resumo do pack.
+- **Modelos:** protocolo único; capacidades/packs/limites vêm do servidor (`MachineConfigBean`); handshake
+  extra em S20/S22.
+- **Doc:** [`protocolos/kingsong.md`](protocolos/kingsong.md).
 
-### 3.4 Gotway/Begode/Extreme Bull — 🟡 EXTRAÍDO (estrutura)
-- **Transporte:** `FFE0/FFE1` (v2/v3 com `FFF0/FFF1` + DFU).
-- **Protocolo:** comandos de **1 byte ASCII** (`W`, `B`, `g`, `m`, …) → respostas binárias.
-- **Ops (4):** DEFAULT, REQUEST_WHEEL_NAME, REQUEST_FIRMWARE_NAME, BOOTLOADER (firmware).
-- **Settings:** tela própria (`gw_`): tiltback speed, safety margin alarm, pedal tilt/dip, beeper volume,
-  field weakening, safety margin scaling, correção/offset de tensão, LEDs, farol, riding mode.
-- **Modelos:** MSuper, Nikola, RS, EX, Monster, Master, Extreme, T4, etc. (+ variante CF com dynamic tiltback).
-- **Fontes:** nosso APK + WheelLog (`GotwayAdapter.java`) + eucplanet.
+### 3.4 Gotway/Begode/Extreme Bull — ✅ DOC COMPLETO
+- **Transporte:** só `FFE0/FFE1` (write+notify); `FFF6` declarada e não usada; **sem** `FFF0/FFF1`, **sem** DFU
+  separado, **sem** auth/checksum. Chunks de `MTU−3` (20 B), 5 ms entre chunks, 10 ms entre requests.
+- **Init:** habilitar notify → `N` → `NAME:<nome>`; `V` → 9 bytes ASCII de firmware (`GW`/`JL`/`JN`/`CF`;
+  CF = dynamic tiltback). Scan aceita só nome contendo `GotWay`/`BEGODE`.
+- **Protocolo:** comandos ASCII de 1 byte com sleeps (`N,V,g,m,s,f,h,b,Q/T/E/R,o/u/i,x/e,>/=/<,c+y,"`, `+/-`,
+  `!`,`@`, `W B/M/C/X/R/U/P tt/Y tu`) → respostas de 24 B `55 AA <16B> <[18] tipo> <[19]=0x18|página> 5A5A5A5A`,
+  **big-endian**, sem CRC.
+- **Telemetria:** 5 tipos de quadro; tensão ×0,01 V (tipo 0) e ×0,1 V (tipo 1 — escalas divergentes),
+  velocidade ×0,036 km/h, trip m, corrente ×0,01 A, temp = v/340+36,53, odômetro u32 m, PWM; % de bateria por
+  tabela fixa no app (6550 = 100 % … 5320 = 10 %).
+- **BMS:** detalhado — tipos 2/3/5/6 = packs 1..4 (célula `i = página*8+n` em mV) e tipo 1 páginas 0..6 = info por board.
+- **Firmware:** `!`/`@` alternados → YMODEM (1024 B, CRC16, MD5) na mesma `FFE1`.
+- **Modelos:** o app não tem lista (usa `devideType` + firmware); 93 modelos com flags de Smart BMS na referência EUC World.
+- **Doc:** [`protocolos/begode.md`](protocolos/begode.md).
 
-### 3.5 Veteran/LeaperKim — 🟡 EXTRAÍDO (framing)
-- **Transporte:** `FFE0/FFE1` + `FFE5/FFE9` (chunks).
-- **Framing:** `4C <tipo> 41 70 <len> <payload> <CRC32 big-endian>` (RX valida `[0]==0x4C`).
-- **Ops (2):** DEFAULT, BOOTLOADER.
-- **Settings (`vn_`):** alarm speed, speed limit, safety margin limit, display backlight, dynamic assist,
-  charging voltage limit, correção de tensão, download event log, firmware.
-- **Modelos:** Sherman, Sherman S, Abrams, Patton, Lynx.
-- **Fontes:** nosso APK + WheelLog (`VeteranAdapter.java`).
+### 3.5 Veteran/LeaperKim — ✅ DOC COMPLETO
+- **Transporte:** **somente `FFE0/FFE1`** (sem `FFE5/FFE9`); MTU 120, chunks de 20 B com resposta; scan por nome `LK`.
+- **Framing:** TX `4C <6B|64> 41 70 <len> <op> <alvo> <corpo> CRC32 BE` (sem byte de nº de comando; `0x80` =
+  não alterar; HW `004x` recebe só `6B`); RX header `DC 5A 5C` com tipo no offset 46, i16/u16 big-endian,
+  distâncias u32 palavra-baixa-primeiro em metros; o app não valida CRC. Sem auth, sem polling.
+- **Comandos:** 26 mapeados (alarme, tiltback, ride mode contínuo/discreto, farol, buzzer, zerar viagem,
+  desligar 10 s, corte lateral, transporte, ângulo, gyro, pedal, PWM, backlight, unidade, correção de tensão,
+  low/high speed, volume, tensão de carga, assist, redução do acelerômetro, freio, hora, senha op 0/1/2/3/11).
+- **BMS:** 2 packs × 3 frames (até 120 células, 6 temps, corrente por pack).
+- **Modelos:** 8 rodas por hardware code (Sherman `0010` → Patton-S `0070`) + tabela SOC de 100 pontos; firmware
+  via `AT+RINTOPRO` + `.bin`; event log por frames 32/33.
+- **Doc:** [`protocolos/leaperkim.md`](protocolos/leaperkim.md).
 
-### 3.6 Ninebot/Segway — 🟡 EXTRAÍDO
-- **One S2/A1** (`C5911d0`): framing `55 AA`, ops (29): INIT_CONFIG/FIRMWARE/LEDS/PASSWORD/PEDAL_SENSITIVITY/
-  SERIAL_1..3/SPEED_TILTBACK/SPORTS_MODE/STATUS, READ_* (batt/speed, config, dist, leds, pedal sensitivity,
-  speed limit range, speed tiltback, sports mode, status, temperature, tilt/roll, voltage/current), WRITE_* (config, leds, lock, pedal, tiltback, sports).
-- **One Z** (`C5915f0`): NUS; callbacks: assistedBraking, battery1/2 Charging/Overheating/Overvoltage,
-  brakelight, headlight, ledsMode, liftSensor, lock, pedalSensitivity, speakerVolume, speedAlarm1/2/3(+Enabled), speedTiltback.
-- **Modelos:** One S2, One A1, One Z.
-- **Fontes:** nosso APK + WheelLog (`NinebotAdapter.java`) + eucplanet.
+### 3.6 Ninebot/Segway — ❌ fora de escopo
+- A Ninebot/Segway descontinuou a linha de monociclos e o app oficial atual (`com.ninebot.segway`,
+  "Segway Mobility") não suporta EUC — marca removida do escopo do projeto.
 
 ### 3.7 Outras marcas (oportunidades)
 | Marca | Situação | Caminho |
 |---|---|---|
 | **Rockwheel** | Suportado via protocolo KingSong (nome "RW") | Reusar KingSongAdapter |
 | **Solowheel** | Inmotion V1 | Reusar InmotionV1Adapter |
-| **Nosfet** (Aero/Apex) | Não suportado pelo EUC World 2.66.0 | Protocolo próprio? Pesquisar/capturar |
+| **Nosfet** (Apex/Aero/Aeon/Xeno) | ✅ Doc completo — o app é **fork do LeaperKim** (protocolo em `com.laoniao.leaperkim`) | Reusar `VeteranAdapter` com ajustes — [`protocolos/nosfet.md`](protocolos/nosfet.md) |
 | **Inmotion E20/P6 (scooters)** | Suportados (routing estendido) | InmotionV2Adapter com variante |
 | Outras marcas novas | — | Arquitetura permite adicionar adapter |
 
@@ -187,7 +215,7 @@ data class WheelCapabilities(
 | **3** | KingSong | KingSong (+Rockwheel) | Telemetria + settings + firmware |
 | **4** | Gotway/Begode | Gotway | Telemetria + settings |
 | **5** | Veteran | Veteran | Telemetria + settings + event log |
-| **6** | Ninebot | S2/A1/Z | Telemetria + settings |
+| ~~6~~ | ~~Ninebot~~ | ❌ fora de escopo (ver §3.6) | — |
 | **7** | Extras | — | Seleção manual de protocolo, import/export de captura, emulador de roda para testes |
 
 **Critério de conclusão por protocolo:** telemetria validada contra a roda real (ou captura),
@@ -216,5 +244,5 @@ comandos testados um a um, capabilities preenchidas, testes unitários dos parse
 
 1. **Agora:** Fase 1 (Inmotion V2/V11y) — base do app.
 2. **Curto prazo:** Fases 2-3 (Inmotion V1 + KingSong) — cobre a maioria dos usuários.
-3. **Médio prazo:** Fases 4-6 (Gotway, Veteran, Ninebot) — paridade com o EUC World.
+3. **Médio prazo:** Fases 4-5 (Gotway, Veteran) — paridade com o EUC World.
 4. **Longo prazo:** marcas novas (Nosfet etc.) + emulador + firmware update.
