@@ -232,6 +232,17 @@ fun SettingsScreen(
                 }
             }
 
+            SectionCard("Persistência") {
+                SwitchRow(
+                    label = "Reaplicar ao conectar",
+                    checked = state.reapplyOnConnect,
+                    description = "Envia as configurações salvas para a roda a cada conexão " +
+                        "(exceto bloqueio e calibração).",
+                ) {
+                    manager.setReapplyOnConnect(it)
+                }
+            }
+
             SectionCard("Segurança") {
                 state.authenticated?.let { authenticated ->
                     Text(

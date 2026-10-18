@@ -265,8 +265,8 @@ Sincronização roda→app em `si/C5600a.java:37-155` (callback key → chave de
 
 | Setting (UI) | Chave | Comando BLE (sub) | Parse de volta (offset em `m11207L`) |
 |---|---|---|---|
-| Luzes diurnas (DRL) | `in_daytime_running_lights` | `96 2D` (V14/V13/V11Y) | byte 36 bit 2 |
-| Farol on/off | `in_headlight_v11` | `96 50` (fw≥1.4) / `96 40` (antigo) | byte 36 bit 5 |
+| Luzes diurnas (DRL) | `in_daytime_running_lights` | `96 2D` (V14/V13/V11Y) | dado[34] bit 2 |
+| Farol on/off | `in_headlight_v11` | `96 50` (fw≥1.4) / `96 40` (antigo) | dado[34] bit 5 |
 | Brilho do farol | `in_headlight_brightness` | `96 2B <0-100>` | — |
 | Ventilador | `in_fan` | `96 53` (fw≥1.4) / `96 43` | — |
 | Ventilador silencioso | `in_fan_quiet_mode` | `96 38` | — |
@@ -275,10 +275,10 @@ Sincronização roda→app em `si/C5600a.java:37-155` (callback key → chave de
 | Split aceleração | `in_split_riding_modes_acceleration` | `96 3F <acc> <brk>` (V11Y) / `96 40` (V12) | — |
 | Split frenagem | `in_split_riding_modes_braking` | idem | — |
 | Modo performance | `in_performance_mode` | `96 24 <0/1>` | — |
-| Limite de velocidade | `in_speed_limit` | `96 21 <u16LE×100>` | offset 2 /100 |
-| Sensibilidade dos pedais | `in_pedals_sensitivity` | `96 25 <v> <v>` | byte 15/16 |
-| Tilt dos pedais | `in_pedals_tilt` | `96 22 <u16LE>` | offset 10 /100 |
-| Volume do alto-falante | `in_speaker_volume` | `96 26 <0-100>` | byte 17 |
+| Limite de velocidade | `in_speed_limit` | `96 21 <u16LE×100>` | dado[0] /100 |
+| Sensibilidade dos pedais | `in_pedals_sensitivity` | `96 25 <v> <v>` | dado[11] |
+| Tilt dos pedais | `in_pedals_tilt` | `96 22 <u16LE>` | dado[8] /100 |
+| Volume do alto-falante | `in_speaker_volume` | `96 26 <0-100>` | dado[15] |
 | Low-battery riding | `in_go_home` | `96 37 <0/1>` | — |
 | Detecção motor sem carga | `in_motor_no_load_detection` | `96 36 <0/1>` | — |
 | Modo transporte | `in_transportation_mode` | `96 32 <0/1>` | — |

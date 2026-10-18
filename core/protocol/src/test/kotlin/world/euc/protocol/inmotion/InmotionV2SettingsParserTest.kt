@@ -46,8 +46,8 @@ class InmotionV2SettingsParserTest {
         val payload = ByteArray(2 + 14)
         payload[0] = 0xA0.toByte()
         payload[1] = 0x20
-        payload[2 + 2] = 0x64
-        payload[2 + 3] = 0x0A  // 2660 = 26.60 km/h
+        payload[2] = 0x64
+        payload[3] = 0x0A  // 2660 = 26.60 km/h
         val frame = InmotionV2Framing.decode(InmotionV2Framing.encode(InmotionFrameType.DEFAULT, payload))!!
 
         val settings = parser.parse(frame)!!
@@ -74,13 +74,13 @@ class InmotionV2SettingsParserTest {
         flags: Int = 0,
     ): InmotionFrame {
         val data = ByteArray(40)
-        putU16(data, 2, speedLimitRaw)
-        putU16(data, 10, pedalTiltRaw)
-        data[13] = pedalSensitivity.toByte()
-        data[15] = splitAcceleration.toByte()
-        data[16] = splitBraking.toByte()
-        data[17] = speakerVolume.toByte()
-        data[36] = flags.toByte()
+        putU16(data, 0, speedLimitRaw)
+        putU16(data, 8, pedalTiltRaw)
+        data[11] = pedalSensitivity.toByte()
+        data[13] = splitAcceleration.toByte()
+        data[14] = splitBraking.toByte()
+        data[15] = speakerVolume.toByte()
+        data[34] = flags.toByte()
 
         val payload = byteArrayOf(0xA0.toByte(), 0x20) + data
         return InmotionV2Framing.decode(InmotionV2Framing.encode(InmotionFrameType.DEFAULT, payload))!!

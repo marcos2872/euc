@@ -29,6 +29,8 @@ data class WheelUiState(
     val authenticated: Boolean? = null,
     /** O que o modelo conectado suporta (a UI mostra apenas isso). */
     val capabilities: WheelCapabilities = WheelCapabilities(emptySet()),
+    /** Reaplicar as configurações salvas na roda a cada conexão. */
+    val reapplyOnConnect: Boolean = false,
 )
 
 /**

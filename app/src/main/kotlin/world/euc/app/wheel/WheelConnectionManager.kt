@@ -42,11 +42,19 @@ class WheelConnectionManager(context: Context) {
     private val connector = BleWheelConnector(context.applicationContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val alarmConfigStore = AlarmConfigStore(context.applicationContext)
+    private val localSettingsStore = LocalSettingsStore(context.applicationContext)
     private val alarmEngine = AlarmEngine()
     private val alarmNotifier = AlarmNotifier(context.applicationContext)
     private var alarmConfig = alarmConfigStore.load()
 
-    private val _state = MutableStateFlow(WheelUiState(alarmConfig = alarmConfig))
+    private val _state = MutableStateFlow(
+        WheelUiState(
+            alarmConfig = alarmConfig,
+            settings = localSettingsStore.loadWheelSettings(),
+            local = localSettingsStore.loadLocal(),
+            reapplyOnConnect = localSettingsStore.reapplyOnConnect,
+        ),
+    )
     val state: StateFlow<WheelUiState> = _state.asStateFlow()
 
     private var link: AndroidWheelLink? = null
@@ -54,6 +62,7 @@ class WheelConnectionManager(context: Context) {
     private var sessionJob: Job? = null
     private var eventsJob: Job? = null
     private var connectionWatchJob: Job? = null
+    private var reappliedThisConnection = false
 
     /** Escaneia rodas próximas, emitindo cada descoberta. */
     fun scan(timeoutMillis: Long = DEFAULT_SCAN_MILLIS): Flow<DiscoveredWheel> =
@@ -76,6 +85,7 @@ class WheelConnectionManager(context: Context) {
                 config = SessionConfig(logger = { line -> Log.d(LOG_TAG, line) }),
             )
             session = newSession
+            reappliedThisConnection = false
             eventsJob = scope.launch { newSession.events.collect(::onSessionEvent) }
             sessionJob = newSession.start(scope)
             startConnectionWatch()
@@ -100,7 +110,12 @@ class WheelConnectionManager(context: Context) {
         connectionWatchJob = null
         session = null
         link = null
-        _state.value = WheelUiState(alarmConfig = alarmConfig)
+        _state.value = WheelUiState(
+            alarmConfig = alarmConfig,
+            settings = localSettingsStore.loadWheelSettings(),
+            local = localSettingsStore.loadLocal(),
+            reapplyOnConnect = localSettingsStore.reapplyOnConnect,
+        )
     }
 
     // ------------------------------------------------------------ ações rápidas
@@ -261,10 +276,18 @@ class WheelConnectionManager(context: Context) {
 
     private fun updateSettings(transform: (WheelSettings) -> WheelSettings) {
         _state.update { it.copy(settings = transform(it.settings)) }
+        localSettingsStore.saveWheelSettings(_state.value.settings)
     }
 
     private fun updateLocal(transform: (LocalSettings) -> LocalSettings) {
         _state.update { it.copy(local = transform(it.local)) }
+        localSettingsStore.saveLocal(_state.value.local)
+    }
+
+    /** Liga/desliga a reaplicação das configurações salvas ao conectar. */
+    fun setReapplyOnConnect(enabled: Boolean) {
+        localSettingsStore.reapplyOnConnect = enabled
+        _state.update { it.copy(reapplyOnConnect = enabled) }
     }
 
     private fun onSessionEvent(event: SessionEvent) {
@@ -283,8 +306,10 @@ class WheelConnectionManager(context: Context) {
             }
             is SessionEvent.SerialNumberReceived -> _state.update { it.copy(serialNumber = event.serialNumber) }
             is SessionEvent.FirmwareReceived -> _state.update { it.copy(firmware = event.versions) }
-            is SessionEvent.SettingsReceived -> _state.update {
-                it.copy(settings = it.settings.mergedWith(event.settings))
+            is SessionEvent.SettingsReceived -> {
+                _state.update { it.copy(settings = it.settings.mergedWith(event.settings)) }
+                localSettingsStore.saveWheelSettings(_state.value.settings)
+                scope.launch { maybeReapplySettings() }
             }
             is SessionEvent.AuthenticationCompleted -> _state.update { it.copy(authenticated = event.success) }
             is SessionEvent.CommandTimedOut -> Unit // observabilidade futura (log de depuração)
@@ -303,6 +328,44 @@ class WheelConnectionManager(context: Context) {
         speakerVolumePercent = reported.speakerVolumePercent ?: speakerVolumePercent,
         extendedLateralTiltLimit = reported.extendedLateralTiltLimit ?: extendedLateralTiltLimit,
     )
+
+    /**
+     * Reaplica na roda as configurações salvas, uma única vez por conexão.
+     *
+     * Não reaplica o bloqueio (travar sozinho ao conectar seria perigoso) nem
+     * a calibração.
+     */
+    private suspend fun maybeReapplySettings() {
+        if (reappliedThisConnection || !_state.value.reapplyOnConnect) return
+        reappliedThisConnection = true
+
+        val settings = _state.value.settings
+        val local = _state.value.local
+
+        settings.speedLimitKmh?.let { setSpeedLimit(it) }
+        settings.pedalTiltDegrees?.let { setPedalTilt(it) }
+        settings.pedalSensitivityPercent?.let { setPedalSensitivity(it) }
+        settings.ridingMode?.let { setRidingMode(it) }
+        settings.splitRidingModesEnabled?.let { setSplitRidingModes(it) }
+        val acceleration = settings.splitRidingAccelerationPercent
+        val braking = settings.splitRidingBrakingPercent
+        if (acceleration != null && braking != null) {
+            setSplitRidingSettings(acceleration, braking)
+        }
+        settings.speakerVolumePercent?.let { setSpeakerVolume(it) }
+        settings.extendedLateralTiltLimit?.let { setExtendedLateralTiltLimit(it) }
+
+        setDaytimeRunningLights(local.daytimeRunningLightsOn)
+        setHeadlight(local.headlightOn)
+        setHeadlightBrightness(local.headlightBrightness)
+        setCoolingFan(local.fanOn)
+        if (local.fanQuietMode) setCoolingFanQuietMode(true)
+        setPerformanceMode(local.performanceMode)
+        setLowBatteryRiding(local.lowBatteryRiding)
+        setMotorNoLoadDetection(local.motorNoLoadDetection)
+        setTransportationMode(local.transportationMode)
+        setHandleButton(local.handleButton)
+    }
 
     // ------------------------------------------------------------ alarmes
 

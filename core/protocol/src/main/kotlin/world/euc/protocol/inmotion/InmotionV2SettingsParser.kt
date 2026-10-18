@@ -11,13 +11,15 @@ import world.euc.protocol.model.WheelSettings
  *
  * | Offset | Campo                          | Escala |
  * |--------|--------------------------------|--------|
- * | 2      | Limite de velocidade           | /100   |
- * | 10     | Tilt dos pedais                | /100°  |
- * | 13     | Sensibilidade dos pedais       | %      |
- * | 15     | Split riding: aceleração       | %      |
- * | 16     | Split riding: frenagem         | %      |
- * | 17     | Volume do alto-falante         | %      |
- * | 36     | bit 2: split ligado · bit 5: tilt lateral estendido | — |
+ * | 0      | Limite de velocidade           | /100   |
+ * | 8      | Tilt dos pedais                | /100°  |
+ * | 11     | Sensibilidade dos pedais       | %      |
+ * | 13     | Split riding: aceleração       | %      |
+ * | 14     | Split riding: frenagem         | %      |
+ * | 15     | Volume do alto-falante         | %      |
+ * | 34     | bit 2: split ligado · bit 5: tilt lateral estendido | — |
+ *
+ * (Offsets nos dados, isto é, após os 2 bytes de prefixo `A0 20`.)
  *
  * Outras configurações (farol, DRL, ventilador, modos) não são reportadas
  * nesse quadro pelo firmware: o app mantém o último valor conhecido.
@@ -63,13 +65,16 @@ class InmotionV2SettingsParser {
         const val RESPONSE_SETTINGS = 0xA0
         const val SETTINGS_SUBCOMMAND = 0x20
 
-        const val OFFSET_SPEED_LIMIT = 2
-        const val OFFSET_PEDAL_TILT = 10
-        const val OFFSET_PEDAL_SENSITIVITY = 13
-        const val OFFSET_SPLIT_ACCELERATION = 15
-        const val OFFSET_SPLIT_BRAKING = 16
-        const val OFFSET_SPEAKER_VOLUME = 17
-        const val OFFSET_FLAGS = 36
+        // Offsets nos DADOS (payload menos os 2 bytes de prefixo `A0 20`).
+        // O EUC World lê no payload (2, 10, 13, 15, 16, 17, 36); o eucplanet
+        // documenta nos dados (0, 8, 11, 13, 14, 15, 34) — os dois batem.
+        const val OFFSET_SPEED_LIMIT = 0
+        const val OFFSET_PEDAL_TILT = 8
+        const val OFFSET_PEDAL_SENSITIVITY = 11
+        const val OFFSET_SPLIT_ACCELERATION = 13
+        const val OFFSET_SPLIT_BRAKING = 14
+        const val OFFSET_SPEAKER_VOLUME = 15
+        const val OFFSET_FLAGS = 34
 
         const val FLAG_SPLIT_RIDING = 0x04
         const val FLAG_EXTENDED_TILT_LIMIT = 0x20
