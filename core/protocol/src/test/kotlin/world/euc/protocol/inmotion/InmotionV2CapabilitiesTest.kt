@@ -2,6 +2,7 @@ package world.euc.protocol.inmotion
 
 import world.euc.protocol.model.WheelSettingId
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -52,6 +53,14 @@ class InmotionV2CapabilitiesTest {
 
         assertTrue(WheelSettingId.COOLING_FAN in capabilities)
         assertFalse(WheelSettingId.EXTENDED_LATERAL_TILT_LIMIT in capabilities)
+    }
+
+    @Test
+    fun `limite de velocidade maxima segue a especificacao de cada modelo`() {
+        assertEquals(60.0, InmotionV2Capabilities.forModel(InmotionModel.V11Y).maxSpeedLimitKmh)
+        assertEquals(50.0, InmotionV2Capabilities.forModel(InmotionModel.V11).maxSpeedLimitKmh)
+        assertEquals(90.0, InmotionV2Capabilities.forModel(InmotionModel.V14).maxSpeedLimitKmh)
+        assertEquals(60.0, InmotionV2Capabilities.forModel(InmotionModel.V12).maxSpeedLimitKmh)
     }
 
     @Test

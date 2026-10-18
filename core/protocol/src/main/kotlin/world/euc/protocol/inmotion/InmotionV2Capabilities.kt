@@ -91,9 +91,25 @@ object InmotionV2Capabilities {
         WheelSettingId.LOCK,
     )
 
+    /**
+     * Velocidade máxima configurável por modelo (top speed oficial):
+     * V11y 60 km/h, V11 50, V12 60, V13/V14 90, V9/V12S/E20/P6 menores.
+     */
+    private fun maxSpeedFor(model: InmotionModel?): Double = when (model) {
+        InmotionModel.V11Y -> 60.0
+        InmotionModel.V11 -> 50.0
+        InmotionModel.V12 -> 60.0
+        InmotionModel.V12S -> 50.0
+        InmotionModel.V13, InmotionModel.V14 -> 90.0
+        InmotionModel.V9 -> 30.0
+        InmotionModel.E20, InmotionModel.P6 -> 25.0
+        InmotionModel.UNKNOWN, null -> 50.0
+    }
+
     /** Capacidades do modelo; sem modelo detectado assume o conjunto da V11y. */
     fun forModel(model: InmotionModel?): WheelCapabilities = WheelCapabilities(
-        when (model) {
+        maxSpeedLimitKmh = maxSpeedFor(model),
+        settings = when (model) {
             InmotionModel.V11 -> V11
             InmotionModel.V11Y -> V11Y
             InmotionModel.V12 -> V12

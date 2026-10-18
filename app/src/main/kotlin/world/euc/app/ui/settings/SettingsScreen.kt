@@ -83,9 +83,10 @@ fun SettingsScreen(
             SectionCard("Condução") {
                 if (WheelSettingId.SPEED_LIMIT in capabilities) {
                     SliderRow(
-                        label = "Limite de velocidade",
+                        label = "Limite de velocidade (tiltback)",
                         value = (settings.speedLimitKmh ?: DEFAULT_SPEED_LIMIT).toFloat(),
-                        valueRange = 5f..50f,
+                        valueRange = capabilities.minSpeedLimitKmh.toFloat()..
+                            capabilities.maxSpeedLimitKmh.toFloat(),
                         unit = " km/h",
                         onCommit = { scope.launch { manager.setSpeedLimit(it.toDouble()) } },
                     )
