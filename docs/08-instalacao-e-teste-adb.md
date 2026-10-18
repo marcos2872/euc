@@ -117,6 +117,15 @@ Compare o painel com a **tela da própria roda** (ou com o app oficial):
 
 ## 6. Diagnóstico de problemas
 
+### Xiaomi / POCO / Redmi (MIUI / HyperOS)
+
+| Sintoma | Causa | Solução |
+|---|---|---|
+| `INSTALL_FAILED_USER_RESTRICTED: Install canceled by user` ao instalar | "Instalar via USB" desligado nas opções de desenvolvedor (ou confirmação não aceita na tela) | **Opções do desenvolvedor → Instalar via USB** (pode exigir conta Mi + chip + internet). Depois repita o comando — na primeira tentativa o sistema mostra um diálogo; aceite. Se persistir, ative também **Depuração USB (Configurações de segurança)** |
+| `SecurityException: grantRuntimePermission` no `adb shell pm grant` | MIUI bloqueia concessão de permissões via shell | Conceda na própria tela do app (botão "Conceder permissões de Bluetooth") ou ative **Depuração USB (Configurações de segurança)** |
+
+### Outros
+
 | Sintoma | Causa provável | Ação |
 |---|---|---|
 | A roda não aparece na busca | Permissão de Bluetooth negada, Bluetooth desligado, ou a roda já está conectada a outro app | Conceda permissões, ligue o Bluetooth, feche o app oficial da Inmotion |
@@ -125,6 +134,12 @@ Compare o painel com a **tela da própria roda** (ou com o app oficial):
 | Valores congelados | Notificações não habilitadas (CCCD) | Desconecte/reconecte; verifique se outra instância está conectada |
 | Buzina/farol sem efeito | Opcode difere por firmware | Anote a versão de firmware mostrada no painel |
 | App fecha ao conectar | Exceção de permissão | `adb logcat --pid=... '*:E'` e me envie |
+
+> **Atenção (BLE):** apenas **um** app pode estar conectado à roda por vez. Antes de testar, force a parada do app oficial:
+> ```bash
+> $ADB shell am force-stop net.lastowski.eucworld
+> ```
+
 
 ## 7. Comandos úteis de referência
 
