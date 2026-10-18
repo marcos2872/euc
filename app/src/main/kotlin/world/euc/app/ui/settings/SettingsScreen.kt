@@ -108,10 +108,18 @@ fun SettingsScreen(
                 SwitchRow("Detecção de motor sem carga", local.motorNoLoadDetection) {
                     scope.launch { manager.setMotorNoLoadDetection(it) }
                 }
-                SwitchRow("Modo transporte", local.transportationMode) {
+                SwitchRow(
+                    label = "Modo transporte",
+                    checked = local.transportationMode,
+                    description = "Impede o motor de engatar se a roda for ligada sem querer durante o transporte.",
+                ) {
                     scope.launch { manager.setTransportationMode(it) }
                 }
-                SwitchRow("Botão da alça", local.handleButton) {
+                SwitchRow(
+                    label = "Botão da alça",
+                    checked = local.handleButton,
+                    description = "Sensor da alça: ao levantar a roda pelo botão, o motor desliga.",
+                ) {
                     scope.launch { manager.setHandleButton(it) }
                 }
             }
@@ -183,10 +191,20 @@ fun SettingsScreen(
             }
 
             SectionCard("Segurança") {
-                SwitchRow("Bloqueio da roda", local.locked) {
+                SwitchRow(
+                    label = "Bloqueio da roda",
+                    checked = local.locked,
+                    description = "Desliga o motor e ativa alarmes de movimento (proteção contra furto). " +
+                        "Use apenas com a roda parada e apoiada.",
+                ) {
                     scope.launch { manager.setLock(it) }
                 }
-                SwitchRow("Tilt lateral estendido", settings.extendedLateralTiltLimit ?: false) {
+                SwitchRow(
+                    label = "Tilt lateral estendido",
+                    checked = settings.extendedLateralTiltLimit ?: false,
+                    description = "Aumenta o limite de inclinação lateral em que o motor se desliga. " +
+                        "Útil em curvas acentuadas; deixe desligado enquanto aprende.",
+                ) {
                     scope.launch { manager.setExtendedLateralTiltLimit(it) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -246,12 +264,26 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun SwitchRow(
+    label: String,
+    checked: Boolean,
+    description: String? = null,
+    onCheckedChange: (Boolean) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            description?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
