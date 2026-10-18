@@ -106,9 +106,20 @@ object InmotionV2Capabilities {
         InmotionModel.UNKNOWN, null -> 50.0
     }
 
+    /**
+     * Framing estendido para ajustes protegidos (limite de velocidade e
+     * bloqueio): confirmado na V11y — o mesmo comando em framing padrão é
+     * ignorado sem aviso (o EUC World tem esse defeito na V11y).
+     */
+    private fun usesExtendedFraming(model: InmotionModel?): Boolean = when (model) {
+        InmotionModel.V9, InmotionModel.V11, InmotionModel.E20, InmotionModel.P6 -> false
+        else -> true
+    }
+
     /** Capacidades do modelo; sem modelo detectado assume o conjunto da V11y. */
     fun forModel(model: InmotionModel?): WheelCapabilities = WheelCapabilities(
         maxSpeedLimitKmh = maxSpeedFor(model),
+        requiresExtendedFraming = usesExtendedFraming(model),
         settings = when (model) {
             InmotionModel.V11 -> V11
             InmotionModel.V11Y -> V11Y

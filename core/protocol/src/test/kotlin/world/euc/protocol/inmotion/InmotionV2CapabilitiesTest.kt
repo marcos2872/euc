@@ -64,6 +64,18 @@ class InmotionV2CapabilitiesTest {
     }
 
     @Test
+    fun `familia V12 mais exige framing estendido nos ajustes protegidos`() {
+        // Confirmado na V11y: limite de velocidade e bloqueio em framing padrão
+        // são ignorados pelo firmware (sem erro, sem confirmação sonora).
+        assertEquals(true, InmotionV2Capabilities.forModel(InmotionModel.V11Y).requiresExtendedFraming)
+        assertEquals(true, InmotionV2Capabilities.forModel(InmotionModel.V12).requiresExtendedFraming)
+        assertEquals(true, InmotionV2Capabilities.forModel(InmotionModel.V13).requiresExtendedFraming)
+        assertEquals(true, InmotionV2Capabilities.forModel(InmotionModel.V14).requiresExtendedFraming)
+        assertEquals(false, InmotionV2Capabilities.forModel(InmotionModel.V11).requiresExtendedFraming)
+        assertEquals(false, InmotionV2Capabilities.forModel(InmotionModel.V9).requiresExtendedFraming)
+    }
+
+    @Test
     fun `todos os modelos suportam limite de velocidade e calibracao`() {
         val models = InmotionModel.entries
 

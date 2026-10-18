@@ -36,6 +36,12 @@ data class WheelCapabilities(
     val maxSpeedLimitKmh: Double = DEFAULT_MAX_SPEED_LIMIT,
     /** Velocidade mínima configurável (tiltback), em km/h. */
     val minSpeedLimitKmh: Double = DEFAULT_MIN_SPEED_LIMIT,
+    /**
+     * Ajustes "protegidos" (limite de velocidade, bloqueio) exigem o framing
+     * estendido (`0x16`, roteamento `02 21`): o firmware da família V12+
+     * **ignora silenciosamente** esses comandos no framing padrão.
+     */
+    val requiresExtendedFraming: Boolean = false,
 ) {
     operator fun contains(setting: WheelSettingId): Boolean = setting in settings
 

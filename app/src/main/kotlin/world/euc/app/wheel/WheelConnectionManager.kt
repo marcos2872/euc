@@ -23,8 +23,8 @@ import world.euc.protocol.alarm.AlarmConfig
 import world.euc.protocol.alarm.AlarmEngine
 import world.euc.protocol.discovery.WheelProtocol
 import world.euc.protocol.inmotion.InmotionCommand
+import world.euc.protocol.inmotion.InmotionFrameType
 import world.euc.protocol.inmotion.InmotionV2Commands
-import world.euc.protocol.inmotion.InmotionModel
 import world.euc.protocol.inmotion.InmotionV2Capabilities
 import world.euc.protocol.inmotion.InmotionV2Session
 import world.euc.protocol.inmotion.SessionConfig
@@ -150,7 +150,12 @@ class WheelConnectionManager(context: Context) {
     suspend fun setSpeedLimit(kmh: Double) {
         val capabilities = _state.value.capabilities
         val safe = kmh.coerceIn(capabilities.minSpeedLimitKmh, capabilities.maxSpeedLimitKmh)
-        send(InmotionV2Commands.speedTiltback(safe))
+        send(
+            InmotionV2Commands.speedTiltback(
+                safe,
+                extended = capabilities.requiresExtendedFraming,
+            ),
+        )
         updateSettings { it.copy(speedLimitKmh = safe) }
     }
 
@@ -234,12 +239,12 @@ class WheelConnectionManager(context: Context) {
      * aceitam a forma simples.
      */
     suspend fun setLock(locked: Boolean) {
-        val model = _state.value.model?.model
-        val needsExtended = model == null || when (model) {
-            InmotionModel.V9, InmotionModel.V11, InmotionModel.V12, InmotionModel.V12S -> false
-            else -> true
-        }
-        send(InmotionV2Commands.lock(locked, extended = needsExtended))
+        send(
+            InmotionV2Commands.lock(
+                locked,
+                extended = _state.value.capabilities.requiresExtendedFraming,
+            ),
+        )
         updateLocal { it.copy(locked = locked) }
     }
 

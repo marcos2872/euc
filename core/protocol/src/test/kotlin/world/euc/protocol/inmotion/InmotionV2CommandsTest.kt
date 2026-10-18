@@ -4,7 +4,22 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 
+private fun ByteArray.toHex(): String = joinToString(" ") { "%02X".format(it) }
+
 class InmotionV2CommandsTest {
+
+    @Test
+    fun `limite de velocidade estendido usa o formato que a V11y aceita`() {
+        val normal = InmotionV2Commands.speedTiltback(30.0)
+        assertEquals(InmotionFrameType.DEFAULT, normal.frameType)
+        assertEquals("60 21 B8 0B", normal.payload.toHex())
+
+        // Formato do V14, o único que a V11y aceita (confirmado em captura):
+        // 02 21 60 21 <u16 LE> 00 00
+        val estendido = InmotionV2Commands.speedTiltback(30.0, extended = true)
+        assertEquals(InmotionFrameType.EXTENDED, estendido.frameType)
+        assertEquals("02 21 60 21 B8 0B 00 00", estendido.payload.toHex())
+    }
 
     @Test
     fun `lock monta payload de controle com subcódigo 0x31`() {

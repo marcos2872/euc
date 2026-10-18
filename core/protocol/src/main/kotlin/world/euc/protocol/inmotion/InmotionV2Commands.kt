@@ -126,9 +126,22 @@ object InmotionV2Commands {
         else -> horn(soundId = 0x02, volume = 100)
     }
 
-    /** Define o limite de velocidade (tiltback), em km/h. */
-    fun speedTiltback(kmh: Double): InmotionCommand =
-        controlWithU16(0x21, kmh * 100)
+    /**
+     * Define o limite de velocidade (tiltback), em km/h.
+     *
+     * [extended] usa o framing estendido com o formato do V14
+     * (`02 21 60 21 <u16LE> 00 00`), que o EUC World só usa nesse modelo.
+     */
+    fun speedTiltback(kmh: Double, extended: Boolean = false): InmotionCommand {
+        val scaled = (kmh * 100).toInt() and 0xFFFF
+        val low = scaled and 0xFF
+        val high = (scaled shr 8) and 0xFF
+        return if (extended) {
+            command(InmotionFrameType.EXTENDED, ROUTING_0, ROUTING_1, CONTROL, 0x21, low, high, 0, 0)
+        } else {
+            control(0x21, low, high)
+        }
+    }
 
     /** Define a inclinação dos pedais (tiltback horizontal), em graus. */
     fun pedalTilt(degrees: Double): InmotionCommand =

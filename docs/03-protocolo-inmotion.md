@@ -148,7 +148,7 @@ temps em `40-46`, state byte em `54`, light byte em `55`.
 
 | Comando | Payload | Método EUC World | Notas [COM] |
 |---|---|---|---|
-| WRITE_SPEED_TILTBACK | `96 21 <u16 LE×100>` | m11192f1 | Forma estendida `16 07 02 21 60 21 …` em V12+ |
+| WRITE_SPEED_TILTBACK | `96 21 <u16 LE×100>` | m11192f1 | **Na V11y só funciona estendido**: `02 21 60 21 <u16 LE> 00 00` (tipo `0x16`) — validado em captura (30 → 35 → 60 km/h). O EUC World manda em framing padrão para a V11y e é ignorado |
 | WRITE_PEDAL_TILT | `96 22 <u16 LE>` | m11184Y0 | |
 | WRITE_PEDAL_SENSITIVITY | `96 25 <v> <v>` | m11183X0 | |
 | WRITE_RIDING_MODE | `96 23 <modo>` | m11187a1 | 1=classic, 0=comfort |
@@ -297,12 +297,12 @@ Sincronização roda→app em `si/C5600a.java:37-155` (callback key → chave de
 | Brilho do farol | `in_headlight_brightness` | `96 2B <0-100>` | — |
 | Ventilador | `in_fan` | `96 53` (fw≥1.4) / `96 43` | — |
 | Ventilador silencioso | `in_fan_quiet_mode` | `96 38` | — |
-| Modo de condução | `in_riding_mode` | `96 23 <0/1>` | byte 13 |
+| Modo de condução | `in_riding_mode` | `96 23 <0/1>` (framing padrão, funciona) | dado[10] bit 0 (0 = Comfort, 1 = Sport) — confirmado em captura |
 | Split riding modes | `in_split_riding_modes` | `96 42` (V12) / `96 3E` | — |
 | Split aceleração | `in_split_riding_modes_acceleration` | `96 3F <acc> <brk>` (V11Y) / `96 40` (V12) | — |
 | Split frenagem | `in_split_riding_modes_braking` | idem | — |
 | Modo performance | `in_performance_mode` | `96 24 <0/1>` | — |
-| Limite de velocidade | `in_speed_limit` | `96 21 <u16LE×100>` | dado[0] /100 |
+| Limite de velocidade | `in_speed_limit` | `96 21 <u16LE×100>` **estendido** (`02 21 60 21 … 00 00`) | telemetria dado[40] /100 (o campo do quadro de settings vem em unidades de 0,5 km/h: 12000 = 60 km/h) |
 | Sensibilidade dos pedais | `in_pedals_sensitivity` | `96 25 <v> <v>` | dado[11] |
 | Tilt dos pedais | `in_pedals_tilt` | `96 22 <u16LE>` | dado[8] /100 |
 | Volume do alto-falante | `in_speaker_volume` | `96 26 <0-100>` | dado[15] |
