@@ -19,11 +19,12 @@ import world.euc.protocol.inmotion.InmotionCommand
 import world.euc.protocol.inmotion.InmotionV2Commands
 import world.euc.protocol.inmotion.InmotionV2Session
 import world.euc.protocol.inmotion.SessionEvent
+import world.euc.protocol.model.WheelSettings
 
 /**
- * Orquestra a conexão com a roda: escaneamento, sessão de protocolo e estado
- * para a UI. Vive no processo (criado pela [world.euc.app.EucApplication]) para
- * sobreviver à navegação entre telas.
+ * Orquestra a conexão com a roda: escaneamento, sessão de protocolo, comandos
+ * e estado para a UI. Vive no processo (criado pela
+ * [world.euc.app.EucApplication]) para sobreviver à navegação entre telas.
  */
 class WheelConnectionManager(context: Context) {
 
@@ -77,24 +78,155 @@ class WheelConnectionManager(context: Context) {
         sessionJob = null
         session = null
         link = null
-        _state.update {
-            WheelUiState(connection = ConnectionState.Disconnected)
-        }
+        _state.value = WheelUiState()
     }
+
+    // ------------------------------------------------------------ ações rápidas
 
     /** Aciona a buzina da roda. */
     suspend fun horn() {
         send(InmotionV2Commands.horn())
     }
 
-    /** Liga/desliga o farol (estado otimista até a roda confirmar). */
-    suspend fun setLight(on: Boolean) {
+    /** Liga/desliga o farol. */
+    suspend fun setHeadlight(on: Boolean) {
         send(InmotionV2Commands.headlight(on))
-        _state.update { it.copy(lightOn = on) }
+        updateLocal { it.copy(headlightOn = on) }
     }
+
+    /** Liga/desliga as luzes diurnas (DRL). */
+    suspend fun setDaytimeRunningLights(on: Boolean) {
+        send(InmotionV2Commands.daytimeRunningLights(on))
+        updateLocal { it.copy(daytimeRunningLightsOn = on) }
+    }
+
+    /** Ajusta o brilho do farol (0-100). */
+    suspend fun setHeadlightBrightness(percent: Int) {
+        send(InmotionV2Commands.headlightBrightness(percent))
+        updateLocal { it.copy(headlightBrightness = percent.coerceIn(0, 100)) }
+    }
+
+    // ------------------------------------------------------------ condução
+
+    /** Define o limite de velocidade (tiltback), em km/h. */
+    suspend fun setSpeedLimit(kmh: Double) {
+        send(InmotionV2Commands.speedTiltback(kmh))
+        updateSettings { it.copy(speedLimitKmh = kmh) }
+    }
+
+    /** Define a inclinação dos pedais, em graus. */
+    suspend fun setPedalTilt(degrees: Double) {
+        send(InmotionV2Commands.pedalTilt(degrees))
+        updateSettings { it.copy(pedalTiltDegrees = degrees) }
+    }
+
+    /** Define a sensibilidade dos pedais (0-100). */
+    suspend fun setPedalSensitivity(percent: Int) {
+        send(InmotionV2Commands.pedalSensitivity(percent))
+        updateSettings { it.copy(pedalSensitivityPercent = percent.coerceIn(0, 100)) }
+    }
+
+    /** Liga/desliga os modos de condução separados. */
+    suspend fun setSplitRidingModes(enabled: Boolean) {
+        send(InmotionV2Commands.splitRidingModes(enabled))
+        updateSettings { it.copy(splitRidingModesEnabled = enabled) }
+    }
+
+    /** Ajusta aceleração e frenagem dos modos separados (0-100). */
+    suspend fun setSplitRidingSettings(acceleration: Int, braking: Int) {
+        send(
+            InmotionV2Commands.splitRidingModesSettings(
+                acceleration = acceleration.coerceIn(0, 100),
+                braking = braking.coerceIn(0, 100),
+            ),
+        )
+        updateSettings {
+            it.copy(
+                splitRidingAccelerationPercent = acceleration.coerceIn(0, 100),
+                splitRidingBrakingPercent = braking.coerceIn(0, 100),
+            )
+        }
+    }
+
+    /** Liga/desliga o modo performance. */
+    suspend fun setPerformanceMode(on: Boolean) {
+        send(InmotionV2Commands.performanceMode(on))
+        updateLocal { it.copy(performanceMode = on) }
+    }
+
+    /** Permite rodar com bateria baixa (modo "go home"). */
+    suspend fun setLowBatteryRiding(on: Boolean) {
+        send(InmotionV2Commands.lowBatteryRiding(on))
+        updateLocal { it.copy(lowBatteryRiding = on) }
+    }
+
+    /** Liga/desliga a detecção de motor sem carga. */
+    suspend fun setMotorNoLoadDetection(on: Boolean) {
+        send(InmotionV2Commands.motorNoLoadDetection(on))
+        updateLocal { it.copy(motorNoLoadDetection = on) }
+    }
+
+    /** Liga/desliga o modo transporte. */
+    suspend fun setTransportationMode(on: Boolean) {
+        send(InmotionV2Commands.transportationMode(on))
+        updateLocal { it.copy(transportationMode = on) }
+    }
+
+    /** Habilita/desabilita o botão da alça. */
+    suspend fun setHandleButton(enabled: Boolean) {
+        send(InmotionV2Commands.handleButton(enabled))
+        updateLocal { it.copy(handleButton = enabled) }
+    }
+
+    /** Bloqueia/desbloqueia a roda. */
+    suspend fun setLock(locked: Boolean) {
+        send(InmotionV2Commands.lock(locked))
+        updateLocal { it.copy(locked = locked) }
+    }
+
+    /** Liga/desliga o limite de inclinação lateral estendido. */
+    suspend fun setExtendedLateralTiltLimit(on: Boolean) {
+        send(InmotionV2Commands.extendedLateralTiltLimit(on))
+        updateSettings { it.copy(extendedLateralTiltLimit = on) }
+    }
+
+    // ------------------------------------------------------------ som e ventilador
+
+    /** Ajusta o volume do alto-falante (0-100). */
+    suspend fun setSpeakerVolume(percent: Int) {
+        send(InmotionV2Commands.speakerVolume(percent))
+        updateSettings { it.copy(speakerVolumePercent = percent.coerceIn(0, 100)) }
+    }
+
+    /** Liga/desliga o ventilador. */
+    suspend fun setCoolingFan(on: Boolean) {
+        send(InmotionV2Commands.coolingFan(on))
+        updateLocal { it.copy(fanOn = on) }
+    }
+
+    /** Liga/desliga o modo silencioso do ventilador. */
+    suspend fun setCoolingFanQuietMode(on: Boolean) {
+        send(InmotionV2Commands.coolingFan(on = true, quietMode = on))
+        updateLocal { it.copy(fanQuietMode = on) }
+    }
+
+    /** Inicia a calibração (giroscópio ou ponto zero dos pedais). */
+    suspend fun calibrate(yaw: Boolean) {
+        send(InmotionV2Commands.calibration(yaw))
+    }
+
+    // ------------------------------------------------------------ internos
 
     private suspend fun send(command: InmotionCommand) {
         session?.send(command)
+    }
+
+    private fun updateSettings(transform: (WheelSettings) -> WheelSettings) {
+        _state.update { it.copy(settings = transform(it.settings)) }
+    }
+
+    private fun updateLocal(transform: (LocalSettings) -> LocalSettings) {
+        _state.update { it.copy(local = transform(it.local)) }
     }
 
     private fun onSessionEvent(event: SessionEvent) {
@@ -105,10 +237,24 @@ class WheelConnectionManager(context: Context) {
             is SessionEvent.ModelIdentified -> _state.update { it.copy(model = event.model) }
             is SessionEvent.SerialNumberReceived -> _state.update { it.copy(serialNumber = event.serialNumber) }
             is SessionEvent.FirmwareReceived -> _state.update { it.copy(firmware = event.versions) }
-            SessionEvent.SettingsReceived -> Unit // estado da roda refletido na telemetria
+            is SessionEvent.SettingsReceived -> _state.update {
+                it.copy(settings = it.settings.mergedWith(event.settings))
+            }
             is SessionEvent.CommandTimedOut -> Unit // observabilidade futura (log de depuração)
         }
     }
+
+    /** Mantém valores já conhecidos quando a roda reporta apenas parte deles. */
+    private fun WheelSettings.mergedWith(reported: WheelSettings): WheelSettings = WheelSettings(
+        speedLimitKmh = reported.speedLimitKmh ?: speedLimitKmh,
+        pedalTiltDegrees = reported.pedalTiltDegrees ?: pedalTiltDegrees,
+        pedalSensitivityPercent = reported.pedalSensitivityPercent ?: pedalSensitivityPercent,
+        splitRidingModesEnabled = reported.splitRidingModesEnabled ?: splitRidingModesEnabled,
+        splitRidingAccelerationPercent = reported.splitRidingAccelerationPercent ?: splitRidingAccelerationPercent,
+        splitRidingBrakingPercent = reported.splitRidingBrakingPercent ?: splitRidingBrakingPercent,
+        speakerVolumePercent = reported.speakerVolumePercent ?: speakerVolumePercent,
+        extendedLateralTiltLimit = reported.extendedLateralTiltLimit ?: extendedLateralTiltLimit,
+    )
 
     private companion object {
         const val DEFAULT_SCAN_MILLIS = 15_000L

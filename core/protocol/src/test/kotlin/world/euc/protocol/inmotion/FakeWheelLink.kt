@@ -64,7 +64,14 @@ object TestFrames {
         return frame(payload)
     }
 
-    fun settings(): ByteArray = frame(byteArrayOf(0xA0.toByte(), 0x20, 0x00, 0x00))
+    fun settings(speedLimitRaw: Int = 2500, speakerVolume: Int = 20): ByteArray {
+        val data = ByteArray(40)
+        val unsigned = speedLimitRaw and 0xFFFF
+        data[2] = (unsigned and 0xFF).toByte()
+        data[3] = ((unsigned shr 8) and 0xFF).toByte()
+        data[17] = speakerVolume.toByte()
+        return frame(byteArrayOf(0xA0.toByte(), 0x20) + data)
+    }
 
     fun values(
         voltageRaw: Int = 8420,

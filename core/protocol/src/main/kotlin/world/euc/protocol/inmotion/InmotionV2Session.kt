@@ -13,6 +13,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import world.euc.protocol.link.WheelLink
+import world.euc.protocol.model.WheelSettings
 import world.euc.protocol.model.WheelTelemetry
 import java.util.concurrent.atomic.AtomicReference
 
@@ -35,6 +36,7 @@ class InmotionV2Session(
 
     private val reader = InmotionV2FrameReader()
     private val telemetryParser = InmotionV2TelemetryParser()
+    private val settingsParser = InmotionV2SettingsParser()
     private val queue = Channel<QueuedCommand>(config.queueCapacity)
     private val responseWaiter = AtomicReference<ResponseWaiter?>(null)
 
@@ -106,16 +108,9 @@ class InmotionV2Session(
         InmotionV2Responses.parseFirmwareVersions(frame)?.let { versions ->
             _events.tryEmit(SessionEvent.FirmwareReceived(versions))
         }
-        if (isSettingsResponse(frame)) {
-            _events.tryEmit(SessionEvent.SettingsReceived)
+        settingsParser.parse(frame)?.let { settings ->
+            _events.tryEmit(SessionEvent.SettingsReceived(settings))
         }
-    }
-
-    private fun isSettingsResponse(frame: InmotionFrame): Boolean {
-        val payload = frame.payload
-        return payload.size >= 2 &&
-            payload[0].toInt() and 0xFF == 0xA0 &&
-            payload[1].toInt() and 0xFF == 0x20
     }
 
     private suspend fun commandLoop() {
@@ -187,8 +182,8 @@ sealed interface SessionEvent {
     /** Versões de firmware recebidas. */
     data class FirmwareReceived(val versions: FirmwareVersions) : SessionEvent
 
-    /** Configurações da roda recebidas. */
-    data object SettingsReceived : SessionEvent
+    /** Configurações da roda recebidas (apenas os campos reportados). */
+    data class SettingsReceived(val settings: WheelSettings) : SessionEvent
 
     /** Consulta esgotou as tentativas sem resposta. */
     data class CommandTimedOut(val command: InmotionCommand) : SessionEvent

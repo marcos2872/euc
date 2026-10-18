@@ -2,6 +2,7 @@ package world.euc.app.wheel
 
 import world.euc.protocol.inmotion.FirmwareVersions
 import world.euc.protocol.inmotion.InmotionModelInfo
+import world.euc.protocol.model.WheelSettings
 import world.euc.protocol.model.WheelTelemetry
 
 /** Estado observável da conexão e da telemetria para a UI. */
@@ -11,10 +12,30 @@ data class WheelUiState(
     val serialNumber: String? = null,
     val firmware: FirmwareVersions? = null,
     val telemetry: WheelTelemetry = WheelTelemetry(),
+    /** Configurações reportadas pela roda (parcial, conforme o firmware). */
+    val settings: WheelSettings = WheelSettings(),
+    /** Configurações que a roda não reporta — mantidas pelo app. */
+    val local: LocalSettings = LocalSettings(),
     /** Relógio da última leitura recebida (0 = nenhuma). */
     val lastTelemetryAtMillis: Long = 0L,
-    /** Último estado de farol comandado pelo app (otimista). */
-    val lightOn: Boolean? = null,
+)
+
+/**
+ * Valores que o firmware da V11y não devolve no quadro de configurações.
+ * O app mantém o último valor comandado (comportamento do EUC World).
+ */
+data class LocalSettings(
+    val headlightOn: Boolean = false,
+    val daytimeRunningLightsOn: Boolean = false,
+    val headlightBrightness: Int = 100,
+    val fanOn: Boolean = false,
+    val fanQuietMode: Boolean = false,
+    val performanceMode: Boolean = false,
+    val locked: Boolean = false,
+    val lowBatteryRiding: Boolean = false,
+    val motorNoLoadDetection: Boolean = false,
+    val transportationMode: Boolean = false,
+    val handleButton: Boolean = true,
 )
 
 /** Estados do ciclo de conexão. */

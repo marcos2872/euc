@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -42,7 +43,11 @@ import java.util.Locale
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(manager: WheelConnectionManager, state: WheelUiState) {
+fun DashboardScreen(
+    manager: WheelConnectionManager,
+    state: WheelUiState,
+    onOpenSettings: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -66,6 +71,9 @@ fun DashboardScreen(manager: WheelConnectionManager, state: WheelUiState) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "Configurações da roda")
+                    }
                     IconButton(onClick = { manager.disconnect() }) {
                         Icon(Icons.Default.LinkOff, contentDescription = "Desconectar")
                     }
@@ -85,9 +93,9 @@ fun DashboardScreen(manager: WheelConnectionManager, state: WheelUiState) {
             BatteryCard(state.telemetry)
             StatsCard(state.telemetry)
             QuickActionsCard(
-                lightOn = state.lightOn,
+                lightOn = state.local.headlightOn,
                 onHorn = { scope.launch { manager.horn() } },
-                onToggleLight = { on -> scope.launch { manager.setLight(on) } },
+                onToggleLight = { on -> scope.launch { manager.setHeadlight(on) } },
             )
             FreshnessHint(state)
             Spacer(Modifier.height(8.dp))
