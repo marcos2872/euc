@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +27,8 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Card
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
@@ -49,9 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -62,7 +61,6 @@ import world.euc.app.tour.TourStore
 import world.euc.app.tour.TourSummary
 import world.euc.app.tour.formatDuration
 import world.euc.app.ui.components.SectionCard
-import java.io.File
 import java.util.Locale
 
 /**
@@ -85,6 +83,7 @@ fun ToursScreen(
     var selectionMode by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(emptySet<String>()) }
     var confirmDeleteSelection by remember { mutableStateOf(false) }
+    var shareMenuOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(refreshKey, recording.recording) {
@@ -173,7 +172,7 @@ fun ToursScreen(
                             tours.map { it.id }.toSet()
                         }
                     },
-                    onShare = { shareTours(context, scope, store, selectedIds) },
+                    onShare = { shareMenuOpen = true },
                     onDelete = { confirmDeleteSelection = true },
                     onCancel = {
                         selectionMode = false
@@ -204,6 +203,21 @@ fun ToursScreen(
                         },
                     )
                 }
+            }
+        }
+    }
+
+    if (shareMenuOpen) {
+        val ids = selectedIds
+        DropdownMenu(expanded = true, onDismissRequest = { shareMenuOpen = false }) {
+            TourShareFormat.entries.forEach { format ->
+                DropdownMenuItem(
+                    text = { Text("${format.label} — ${format.description}") },
+                    onClick = {
+                        shareMenuOpen = false
+                        shareTours(context, scope, store, ids, format)
+                    },
+                )
             }
         }
     }
@@ -294,42 +308,6 @@ private fun SelectionHeader(
         IconButton(onClick = onCancel) {
             Icon(Icons.Default.Close, contentDescription = "Sair da seleção")
         }
-    }
-}
-
-/** Exporta os passeios escolhidos em CSV e manda para o compartilhamento do Android. */
-private fun shareTours(
-    context: Context,
-    scope: CoroutineScope,
-    store: TourStore,
-    ids: Set<String>,
-) {
-    if (ids.isEmpty()) return
-    scope.launch {
-        val files = withContext(Dispatchers.IO) {
-            ids.mapNotNull { id ->
-                store.load(id)?.let { tour ->
-                    runCatching { store.exportCsv(tour, File(context.cacheDir, "${tour.id}.csv")) }
-                        .getOrNull()
-                }
-            }
-        }
-        if (files.isEmpty()) return@launch
-        val uris = ArrayList(
-            files.map { FileProvider.getUriForFile(context, "${context.packageName}.files", it) },
-        )
-        val intent = if (uris.size == 1) {
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/csv"
-                putExtra(Intent.EXTRA_STREAM, uris.first())
-            }
-        } else {
-            Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                type = "text/csv"
-                putExtra(Intent.EXTRA_STREAM, uris)
-            }
-        }.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        context.startActivity(Intent.createChooser(intent, "Compartilhar passeios"))
     }
 }
 

@@ -22,6 +22,8 @@ data class WheelUiState(
     val local: LocalSettings = LocalSettings(),
     /** Odômetros reportados pela roda (viagem/totais), quando o firmware reporta. */
     val statistics: WheelStatistics = WheelStatistics(),
+    /** Histórico curto da telemetria, para os gráficos ao vivo do painel. */
+    val history: LiveHistory = LiveHistory(),
     /** Distância desde a conexão atual, em km (viagem da sessão). */
     val sessionTripKm: Double = 0.0,
     /** Odômetro acumulado pelo app para esta roda, em km (fallback do total). */

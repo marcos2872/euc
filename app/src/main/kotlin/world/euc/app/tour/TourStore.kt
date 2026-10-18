@@ -73,6 +73,12 @@ class TourStore(private val rootDir: File) {
         return target
     }
 
+    /** Exporta o passeio em GPX (Strava, Garmin, Google Earth…). */
+    fun exportGpx(tour: Tour, target: File): File {
+        target.writeText(GpxWriter.write(tour))
+        return target
+    }
+
     fun fileFor(id: String): File = File(rootDir, "$id.$EXTENSION")
 
     // ------------------------------------------------------------- leitura

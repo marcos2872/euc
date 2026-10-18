@@ -91,6 +91,7 @@ class WheelConnectionManager(context: Context) {
             session = newSession
             reappliedThisConnection = false
             tripComputer.reset()
+            _state.update { it.copy(history = LiveHistory()) }
             eventsJob = scope.launch { newSession.events.collect(::onSessionEvent) }
             sessionJob = newSession.start(scope)
             startConnectionWatch()
@@ -329,6 +330,7 @@ class WheelConnectionManager(context: Context) {
                         telemetry = event.telemetry,
                         lastTelemetryAtMillis = now,
                         sessionTripKm = tripComputer.distanceKm,
+                        history = it.history.plus(event.telemetry, now),
                     )
                 }
                 evaluateAlarms(event.telemetry)

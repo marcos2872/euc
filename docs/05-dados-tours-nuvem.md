@@ -136,7 +136,10 @@ Colunas dos pontos: `time,lat,lon,speed,alt,battery,voltage,current,power,temp,d
 - Amostragem de 1 Hz: fix do GPS + telemetria do instante.
 - Descarta fix com precisão > 25 m e movimento < 1 m (ruído com a roda parada), como o EUC World.
 - Velocidade do ponto: a da roda quando existe (mais fiel que a do GPS).
-- Autosave a cada 30 s; o botão compartilhar exporta CSV (cache + FileProvider).
+- Autosave a cada 30 s; o botão compartilhar exporta em **CSV** (planilha) ou **GPX 1.1**
+  (Strava/Garmin/Google Earth), via cache + FileProvider. No GPX, cada ponto leva os dados
+  da roda numa extensão própria (`euc:speed`, `euc:battery`, `euc:power`, `euc:current`,
+  `euc:temperature`) que outros apps ignoram sem problema.
 
 ### 7.2 Log de telemetria (`filesDir/logs/euc-log-<timestamp>.csv`)
 

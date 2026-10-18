@@ -27,7 +27,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,8 +39,13 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import world.euc.app.wheel.ConnectionState
 import world.euc.app.wheel.WheelConnectionManager
+import world.euc.app.ui.components.ChartSample
+import world.euc.app.ui.components.ChoiceFlowRow
 import world.euc.app.ui.components.LabelledValue
+import world.euc.app.ui.components.TimeSeriesChart
 import world.euc.app.ui.components.format
+import world.euc.app.wheel.LiveHistory
+import world.euc.app.wheel.LiveSeriesKind
 import world.euc.app.wheel.WheelUiState
 import world.euc.protocol.model.WheelTelemetry
 import java.util.Locale
@@ -104,6 +113,7 @@ fun DashboardScreen(
             DistanceCard(state)
             BatteryCard(state.telemetry)
             StatsCard(state.telemetry)
+            LiveChartsCard(state.history)
             QuickActionsCard(
                 lightOn = state.local.headlightOn,
                 onHorn = { scope.launch { manager.horn() } },
@@ -243,6 +253,35 @@ private fun StatsCard(telemetry: WheelTelemetry) {
                     LabelledValue("Bateria", temperatures.battery.let { "${it.format(0)}°C" })
                 }
             }
+        }
+    }
+}
+
+/**
+ * Gráficos ao vivo da telemetria: janela deslizante com os últimos ~2 min,
+ * com escolha da série (como no EUC World, mas em cartão próprio).
+ */
+@Composable
+private fun LiveChartsCard(history: LiveHistory) {
+    var kind by remember { mutableStateOf(LiveSeriesKind.SPEED) }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Gráficos ao vivo", style = MaterialTheme.typography.titleMedium)
+            ChoiceFlowRow(
+                label = "Série",
+                options = LiveSeriesKind.entries.map { it to it.label },
+                selected = kind,
+                onSelect = { kind = it },
+            )
+            val series = kind.of(history)
+            TimeSeriesChart(
+                samples = series.samples.map { ChartSample(it.timeMs, it.value) },
+                unit = kind.unit,
+                emptyMessage = "Sem dados de ${kind.label.lowercase()} ainda.",
+            )
         }
     }
 }

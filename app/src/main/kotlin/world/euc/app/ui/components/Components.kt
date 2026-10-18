@@ -2,6 +2,8 @@ package world.euc.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -102,6 +104,35 @@ fun <T> ChoiceRow(
     Column {
         Text(label, style = MaterialTheme.typography.bodyLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { (value, text) ->
+                FilterChip(
+                    selected = value == selected,
+                    onClick = { onSelect(value) },
+                    label = { Text(text) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Escolha entre várias opções em chips, quebrando a linha quando não couber
+ * (diferente de [ChoiceRow], que fica numa linha só).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun <T> ChoiceFlowRow(
+    label: String,
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+) {
+    Column {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
             options.forEach { (value, text) ->
                 FilterChip(
                     selected = value == selected,

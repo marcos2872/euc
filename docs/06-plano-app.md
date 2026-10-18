@@ -65,8 +65,9 @@ desenhados em Canvas, sem biblioteca externa. Detalhes dos formatos em
 `docs/05-dados-tours-nuvem.md` §7.
 1. ✅ Gravação de passeio com GPS (1 Hz), mapa ao vivo, estatísticas e histórico.
 2. ✅ Log CSV com as 46 colunas do EUC World (um arquivo por sessão de conexão).
-3. ✅ Gráficos por série: velocidade, corrente, tensão, potência, temperatura e altitude.
-4. ⏳ Exportação/importação JSON — hoje o compartilhamento é CSV; importar fica para depois.
+3. ✅ Gráficos: por série no detalhe do passeio (velocidade, corrente, tensão, potência,
+   temperatura, altitude) e **ao vivo no painel** (janela deslizante de ~2 min).
+4. ⏳ Exportação em CSV e **GPX** prontas; **importar** passeios fica para depois.
 
 ### Fase 5 — Extras (opcional, conforme uso)
 1. Webserver local de valores (JSON) + BLE server.
