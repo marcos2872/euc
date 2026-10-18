@@ -1,0 +1,12 @@
+# Catálogo de versões central (Gradle Version Catalog).
+# Regra: nenhuma versão de dependência deve ser declarada fora deste arquivo.
+
+[versions]
+kotlin = "2.2.0"
+junitPlatform = "1.11.4"
+
+[libraries]
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitPlatform" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
