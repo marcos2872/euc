@@ -1,13 +1,17 @@
 package world.euc.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -20,21 +24,53 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import world.euc.app.ui.designsystem.EucSpacing
 import java.util.Locale
 import kotlin.math.roundToInt
 
+/**
+ * Cartão base do design system: superfície do tema, contorno fino de 1dp e
+ * cantos generosos (sem sombra — o relevo vem do contorno e da cor).
+ */
+@Composable
+fun EucCard(
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
+    contentPadding: PaddingValues = PaddingValues(EucSpacing.lg),
+    spacing: androidx.compose.ui.unit.Dp = EucSpacing.sm,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(contentPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            content = content,
+        )
+    }
+}
+
 /** Cartão com título, usado para agrupar ajustes e dados. */
 @Composable
-fun SectionCard(title: String, content: @Composable () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            content()
-        }
+fun SectionCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    EucCard(modifier = modifier) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        content()
     }
 }
 
@@ -48,6 +84,7 @@ fun SwitchRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(EucSpacing.md),
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
@@ -80,8 +117,8 @@ fun SliderRow(
             Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
             Text(
                 formatValue(local, decimals) + unit,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
             )
         }
         Slider(
@@ -103,7 +140,7 @@ fun <T> ChoiceRow(
 ) {
     Column {
         Text(label, style = MaterialTheme.typography.bodyLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(EucSpacing.sm)) {
             options.forEach { (value, text) ->
                 FilterChip(
                     selected = value == selected,
@@ -130,8 +167,8 @@ fun <T> ChoiceFlowRow(
     Column {
         Text(label, style = MaterialTheme.typography.bodyLarge)
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(EucSpacing.xs),
         ) {
             options.forEach { (value, text) ->
                 FilterChip(
@@ -146,8 +183,8 @@ fun <T> ChoiceFlowRow(
 
 /** Rótulo pequeno com um valor em destaque. */
 @Composable
-fun LabelledValue(label: String, value: String) {
-    Column {
+fun LabelledValue(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,

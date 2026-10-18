@@ -31,7 +31,7 @@ import world.euc.app.ui.alarms.AlarmsScreen
 import world.euc.app.ui.connect.ConnectScreen
 import world.euc.app.ui.dashboard.DashboardScreen
 import world.euc.app.ui.settings.SettingsScreen
-import world.euc.app.ui.theme.EucTheme
+import world.euc.app.ui.designsystem.EucTheme
 import world.euc.app.ui.tour.TourDetailScreen
 import world.euc.app.ui.tour.ToursScreen
 import world.euc.app.wheel.ConnectionState
@@ -42,22 +42,33 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val application = application as EucApplication
 
+        // Modo debug: permite abrir uma tela específica por ADB, contornando o
+        // bloqueio de toques do MIUI — `am start -S -n world.euc.app/.MainActivity --es screen tours`
+        val debugTab = if (BuildConfig.DEBUG) Tab.fromKey(intent?.getStringExtra("screen")) else null
+
         setContent {
             EucTheme {
-                EucApp(application)
+                EucApp(application, debugTab)
             }
         }
     }
 }
 
 /** Destinos do app. Quais estão disponíveis depende de haver conexão. */
-private enum class Tab(val label: String, val icon: ImageVector) {
-    Connect("Conectar", Icons.Default.Bluetooth),
-    Dashboard("Painel", Icons.Default.Speed),
-    Tours("Passeios", Icons.Default.Timeline),
-    Alarms("Alarmes", Icons.Default.Notifications),
-    Settings("Ajustes", Icons.Default.Settings),
-    About("Sobre", Icons.Default.Info),
+private enum class Tab(val key: String, val label: String, val icon: ImageVector) {
+    Connect("connect", "Conectar", Icons.Default.Bluetooth),
+    Dashboard("dashboard", "Painel", Icons.Default.Speed),
+    Tours("tours", "Passeios", Icons.Default.Timeline),
+    Alarms("alarms", "Alarmes", Icons.Default.Notifications),
+    Settings("settings", "Ajustes", Icons.Default.Settings),
+    About("about", "Sobre", Icons.Default.Info),
+    ;
+
+    companion object {
+        /** Usado só em debug: `am start --es screen <chave>`. */
+        fun fromKey(key: String?): Tab? =
+            entries.firstOrNull { it.key.equals(key, ignoreCase = true) }
+    }
 }
 
 /**
@@ -66,10 +77,10 @@ private enum class Tab(val label: String, val icon: ImageVector) {
  * Passeios · Alarmes · Ajustes (Sobre fica dentro de Ajustes).
  */
 @Composable
-private fun EucApp(application: EucApplication) {
+private fun EucApp(application: EucApplication, debugTab: Tab? = null) {
     val manager = application.wheelConnectionManager
     val state by manager.state.collectAsStateWithLifecycle()
-    var destination by remember { mutableStateOf(Tab.Connect) }
+    var destination by remember { mutableStateOf(debugTab ?: Tab.Connect) }
     var openTourId by remember { mutableStateOf<String?>(null) }
 
     openTourId?.let { tourId ->
@@ -87,7 +98,7 @@ private fun EucApp(application: EucApplication) {
     } else {
         listOf(Tab.Connect, Tab.Tours, Tab.About)
     }
-    val selected = if (destination in tabs) destination else tabs.first()
+    val selected = debugTab ?: if (destination in tabs) destination else tabs.first()
 
     Scaffold(
         bottomBar = {
