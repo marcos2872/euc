@@ -40,7 +40,7 @@ class InmotionV2ResponsesTest {
         val model = InmotionV2Responses.parseModel(decode(TestFrames.carType(modelByte = 6, variant = 2)))
 
         assertNotNull(model)
-        assertEquals(InmotionModel.V11, model.model)
+        assertEquals(InmotionModel.V11Y, model.model)
         assertEquals("V11Y", model.displayName)
         assertEquals(20, model.batterySeries)
         assertEquals(4, model.batteryParallel)

@@ -40,6 +40,8 @@ class InmotionCommand(
 object InmotionV2Commands {
 
     private const val CONTROL = 0x60
+    private const val ROUTING_0 = 0x02
+    private const val ROUTING_1 = 0x21
 
     // ---------------------------------------------------------------- consultas
 
@@ -69,8 +71,22 @@ object InmotionV2Commands {
 
     // ---------------------------------------------------------------- controle
 
-    /** Bloqueia ou desbloqueia a roda. Em V12+ exige o handshake de autenticação. */
-    fun lock(locked: Boolean): InmotionCommand = control(0x31, if (locked) 1 else 0)
+    /**
+     * Bloqueia ou desbloqueia a roda.
+     *
+     * Em V12/V13/V14 (família da V11y) o firmware **ignora** o lock em framing
+     * DEFAULT: é preciso [extended] = true, que adiciona o roteamento `02 21`
+     * e usa o tipo de quadro EXTENDED. Modelos antigos (V11 e anteriores)
+     * aceitam a forma simples.
+     */
+    fun lock(locked: Boolean, extended: Boolean = false): InmotionCommand {
+        val value = if (locked) 1 else 0
+        return if (extended) {
+            command(InmotionFrameType.EXTENDED, ROUTING_0, ROUTING_1, CONTROL, 0x31, value)
+        } else {
+            control(0x31, value)
+        }
+    }
 
     /**
      * Liga/desliga o farol.
@@ -82,13 +98,31 @@ object InmotionV2Commands {
         control(if (legacyHeadlightOpcode) 0x40 else 0x50, if (on) 1 else 0)
 
     /**
-     * Aciona o buzina.
+     * Aciona a buzina com som e volume explícitos.
      *
-     * Os padrões `(0x18, 1)` valem para V9/V11/V11Y/V12/V12S; a V14 usa
-     * `(0x02, 100)`.
+     * Prefira [hornFor], que escolhe o opcode correto por modelo.
      */
     fun horn(soundId: Int = 0x18, volume: Int = 1): InmotionCommand =
         control(0x51, soundId, volume)
+
+    /**
+     * Buzina com o opcode correto para o modelo.
+     *
+     * A família V13/V14 (incluindo a **V11y**) usa `playBeep` `(0x02, 100)`;
+     * V9/V11/V12/V12S usam `playSound` `(0x18, 1)`. O som 0x18 na V11y é um
+     * tom contínuo e não deve ser usado (bug existente no EUC World 2.66.0).
+     */
+    fun hornFor(model: InmotionModel?): InmotionCommand = when (model) {
+        InmotionModel.V9,
+        InmotionModel.V11,
+        InmotionModel.V12,
+        InmotionModel.V12S,
+        InmotionModel.P6,
+        -> horn(soundId = 0x18, volume = 1)
+
+        // V11Y, V13, V14, E20 e desconhecidos: forma moderna.
+        else -> horn(soundId = 0x02, volume = 100)
+    }
 
     /** Define o limite de velocidade (tiltback), em km/h. */
     fun speedTiltback(kmh: Double): InmotionCommand =

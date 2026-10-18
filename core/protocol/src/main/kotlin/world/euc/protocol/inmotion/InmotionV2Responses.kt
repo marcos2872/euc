@@ -94,15 +94,23 @@ data class InmotionModelInfo(
 ) {
     /** Nome comercial exato (ex.: "V11Y"). */
     val displayName: String
-        get() = if (model == InmotionModel.V11 && variant == 2) "V11Y" else model.displayName
+        get() = model.displayName
 
     companion object {
+        /** Variante reportada pela V11y no byte de modelo da V11. */
+        const val V11Y_VARIANT = 2
+
         /**
          * Mapeia o byte de modelo reportado pela roda (layout do EUC World).
          * Modelo desconhecido assume a configuração da V12, como o app oficial.
          */
         fun from(modelByte: Int, variant: Int): InmotionModelInfo = when (modelByte) {
-            6 -> InmotionModelInfo(InmotionModel.V11, variant, 20, 4)
+            6 -> InmotionModelInfo(
+                model = if (variant == V11Y_VARIANT) InmotionModel.V11Y else InmotionModel.V11,
+                variant = variant,
+                batterySeries = 20,
+                batteryParallel = 4,
+            )
             7 -> InmotionModelInfo(InmotionModel.V12, variant, 20, 4)
             8 -> InmotionModelInfo(InmotionModel.V13, variant, 30, 8)
             9 -> InmotionModelInfo(InmotionModel.V14, variant, 32, 4)
@@ -118,6 +126,7 @@ data class InmotionModelInfo(
 /** Modelos da família Inmotion V2. */
 enum class InmotionModel(val displayName: String) {
     V11("V11"),
+    V11Y("V11Y"),
     V12("V12"),
     V13("V13"),
     V14("V14"),

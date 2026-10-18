@@ -23,6 +23,7 @@ import world.euc.protocol.alarm.AlarmEngine
 import world.euc.protocol.discovery.WheelProtocol
 import world.euc.protocol.inmotion.InmotionCommand
 import world.euc.protocol.inmotion.InmotionV2Commands
+import world.euc.protocol.inmotion.InmotionModel
 import world.euc.protocol.inmotion.InmotionV2Session
 import world.euc.protocol.inmotion.SessionEvent
 import world.euc.protocol.model.WheelSettings
@@ -98,9 +99,9 @@ class WheelConnectionManager(context: Context) {
 
     // ------------------------------------------------------------ ações rápidas
 
-    /** Aciona a buzina da roda. */
+    /** Aciona a buzina da roda com o opcode correto para o modelo conectado. */
     suspend fun horn() {
-        send(InmotionV2Commands.horn())
+        send(InmotionV2Commands.hornFor(_state.value.model?.model))
     }
 
     /** Liga/desliga o farol. */
@@ -193,9 +194,19 @@ class WheelConnectionManager(context: Context) {
         updateLocal { it.copy(handleButton = enabled) }
     }
 
-    /** Bloqueia/desbloqueia a roda. */
+    /**
+     * Bloqueia/desbloqueia a roda.
+     *
+     * A família V11y/V12/V13/V14 exige framing estendido; modelos antigos
+     * aceitam a forma simples.
+     */
     suspend fun setLock(locked: Boolean) {
-        send(InmotionV2Commands.lock(locked))
+        val model = _state.value.model?.model
+        val needsExtended = model == null || when (model) {
+            InmotionModel.V9, InmotionModel.V11, InmotionModel.V12, InmotionModel.V12S -> false
+            else -> true
+        }
+        send(InmotionV2Commands.lock(locked, extended = needsExtended))
         updateLocal { it.copy(locked = locked) }
     }
 

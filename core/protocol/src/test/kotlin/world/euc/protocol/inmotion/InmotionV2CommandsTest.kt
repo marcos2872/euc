@@ -34,6 +34,52 @@ class InmotionV2CommandsTest {
     }
 
     @Test
+    fun `buzina da V11y usa playBeep e evita o tom contínuo`() {
+        // A V11y pertence à família V13/V14: playBeep (0x02, 100).
+        // O som 0x18 (playSound) na V11y é um tom contínuo — não usar.
+        assertContentEquals(
+            byteArrayOf(0x60, 0x51, 0x02, 0x64),
+            InmotionV2Commands.hornFor(InmotionModel.V11Y).payload,
+        )
+        assertContentEquals(
+            byteArrayOf(0x60, 0x51, 0x02, 0x64),
+            InmotionV2Commands.hornFor(InmotionModel.V14).payload,
+        )
+        assertContentEquals(
+            byteArrayOf(0x60, 0x51, 0x02, 0x64),
+            InmotionV2Commands.hornFor(InmotionModel.V13).payload,
+        )
+    }
+
+    @Test
+    fun `buzina da V12 e da V11 usa playSound`() {
+        assertContentEquals(
+            byteArrayOf(0x60, 0x51, 0x18, 0x01),
+            InmotionV2Commands.hornFor(InmotionModel.V12).payload,
+        )
+        assertContentEquals(
+            byteArrayOf(0x60, 0x51, 0x18, 0x01),
+            InmotionV2Commands.hornFor(InmotionModel.V11).payload,
+        )
+    }
+
+    @Test
+    fun `lock estendido adiciona roteamento e usa quadro EXTENDED`() {
+        val command = InmotionV2Commands.lock(locked = true, extended = true)
+
+        assertEquals(InmotionFrameType.EXTENDED, command.frameType)
+        assertContentEquals(byteArrayOf(0x02, 0x21, 0x60, 0x31, 0x01), command.payload)
+
+        // Vetor do app oficial (V14 lock): AA AA 16 05 02 21 60 31 01 60
+        assertContentEquals(
+            byteArrayOf(
+                0xAA.toByte(), 0xAA.toByte(), 0x16, 0x05, 0x02, 0x21, 0x60, 0x31, 0x01, 0x60,
+            ),
+            command.toFrame(),
+        )
+    }
+
+    @Test
     fun `tiltback converte km-h para u16 little-endian com escala 100`() {
         // 30 km/h -> 3000 = 0x0BB8 -> LE: B8 0B
         assertContentEquals(byteArrayOf(0x60, 0x21, 0xB8.toByte(), 0x0B), InmotionV2Commands.speedTiltback(30.0).payload)

@@ -167,7 +167,7 @@ temps em `40-46`, state byte em `54`, light byte em `55`.
 | WRITE_MOTOR_SOUND | `96 39 <0/1>` | m11181V0 | |
 | WRITE_SPEED_ALARMS | `96 3E <u16> <u16>` | m11191e1 | dois tiers |
 | WRITE_HEADLIGHT | `96 50 <0/1>` (V14) / `<low> <high>` (V12) | m11210P0 | 1 byte ignorado em V12 HS/HT/Pro |
-| WRITE_HORN | `96 51 <id> <vol>` | — | V14: `02 64`; V11/V12: `18 01` |
+| WRITE_HORN | `96 51 <id> <vol>` | — | **V11Y/V13/V14: `02 64` (playBeep)**; V9/V11/V12/V12S: `18 01` (playSound) — ver nota abaixo |
 | WRITE_CALIBRATION_CHECK/PERFORM | `96 52 01 00 01` (yaw) / `96 52 01 01 00` (pedal) | m11245z0 | |
 | WRITE_MOTOR_NO_LOAD_DETECTION | `96 36 <0/1>` | m11179U0 | |
 | WRITE_SCREEN_AUTO_OFF | `96 3D <0/1>` | m11188b1 | V12 |
@@ -223,6 +223,25 @@ Modelos com 4 packs: V14/V13/V12 (via hash de modelo nas linhas 2872-2930).
 **Para o app novo: implementar framing EXTENDED + handshake de auth desde o início** (referência: eucplanet, MIT).
 
 ---
+
+## 9.1 Correção importante — buzina da V11y (bug do EUC World)
+
+O EUC World 2.66.0 não tem caso específico para a **V11Y** no comando de buzina: ela cai no
+default `60 51 18 01` (`playSound`, som 24). No firmware da V11y esse som é um **tom contínuo**
+que não para sozinho — o sintoma é a roda apitando sem parar.
+
+A referência comunitária (eucplanet, validada contra capturas do app oficial) agrupa a
+**V11y com a família V13/V14**, que usa `playBeep`:
+
+| Modelo | Payload | Efeito |
+|---|---|---|
+| **V11Y, V13, V14, E20** | `60 51 02 64` | bipe curto |
+| V9, V11, V12, V12S | `60 51 18 01` | bipe curto |
+
+Regra implementada em `InmotionV2Commands.hornFor(model)`.
+
+**Lock em V12+:** o firmware ignora o lock em framing DEFAULT — é obrigatório usar
+EXTENDED (`AA AA 16 05 02 21 60 31 01 CK`). Implementado em `lock(locked, extended = true)`.
 
 ## 10. Apêndice A — V11Y: settings ↔ protocolo (mapa completo)
 
