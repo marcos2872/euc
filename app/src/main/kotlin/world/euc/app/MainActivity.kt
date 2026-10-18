@@ -26,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.firstOrNull
 import world.euc.app.ui.about.AboutScreen
 import world.euc.app.ui.alarms.AlarmsScreen
 import world.euc.app.ui.connect.ConnectScreen
@@ -80,21 +79,6 @@ private fun EucApp(application: EucApplication) {
             onBack = { openTourId = null },
         )
         return
-    }
-
-    // SMOKE TEST TEMPORÁRIO: começa a gravar para exercitar o GPS
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        if (!application.tourRecorder.isRecording) {
-            application.tourRecorder.start()
-        }
-    }
-
-    // SMOKE TEST TEMPORÁRIO
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        if (state.connection !is ConnectionState.Connected) {
-            val wheel = manager.scan(timeoutMillis = 30_000).firstOrNull() ?: return@LaunchedEffect
-            runCatching { manager.connect(wheel, wheel.candidates.first().protocol) }
-        }
     }
 
     val connected = state.connection is ConnectionState.Connected
