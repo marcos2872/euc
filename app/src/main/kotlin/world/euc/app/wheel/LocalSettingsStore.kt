@@ -76,6 +76,25 @@ class LocalSettingsStore(context: Context) {
         }
     }
 
+    // --------------------------------------------------------------- odômetro
+
+    /**
+     * Odômetro acumulado **pelo app** para uma roda (km), usado quando o
+     * firmware não reporta a quilometragem total. A chave é o número de série
+     * (ou o endereço BLE, quando a série ainda não chegou).
+     */
+    fun odometerKm(wheelKey: String): Double =
+        prefs.getFloat(odometerKey(wheelKey), 0f).toDouble()
+
+    /** Soma a distância percorrida ao odômetro acumulado da roda. */
+    fun addOdometerKm(wheelKey: String, km: Double) {
+        if (km <= 0.0 || !km.isFinite()) return
+        val key = odometerKey(wheelKey)
+        prefs.edit { putFloat(key, prefs.getFloat(key, 0f) + km.toFloat()) }
+    }
+
+    private fun odometerKey(wheelKey: String) = "odometer_$wheelKey"
+
     // ------------------------------------------------------------- comportamento
 
     /** Reaplicar as configurações salvas na roda a cada conexão. */

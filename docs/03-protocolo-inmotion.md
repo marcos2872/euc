@@ -188,6 +188,33 @@ retry implícito: comando sem resposta correta → `m11216Y()` reenvia/reinicia 
 
 ---
 
+## 6.1 Odômetros (viagem e total) — validados na V11y
+
+Dois quadros, ambos no framing DEFAULT (`0x14`), respondidos pela roda:
+
+| Quadro | Pedido | Resposta | Campo | Offset no payload | Escala |
+|---|---|---|---|---|---|
+| Viagem | `10 00 01` | `0x90` | distância da viagem | 23 | u32 LE / 100 (km) |
+| Viagem | `10 00 01` | `0x90` | tempo desde a ligação | 39 | u32 LE (s) |
+| Totais | `11` | `0x91` | distância total (odômetro) | 1 | u32 LE / 100 (km) |
+| Totais | `11` | `0x91` | tempo total ligada | 5 | u32 LE (s) |
+
+Offsets do EUC World 2.66.0 (`p364uh/C5937z.java`: `getInt(23) * 0.01f` na `0x90`;
+`getInt(1) * 0.01f` e `getInt(5) / 3600f` na `0x91`; inteiros lidos como **u32**),
+**confirmados em quadro real da V11y**:
+
+```
+RX 90 00 01 40 26 62 00 00 00 86 4A 69 81 00 00 00 00 00 00 82 82 82 82 00 ... 00 AE 03 00 00
+      ^^^^^ eco do pedido        ^^^^^ 4 bytes zerados = viagem 0,00 km            ^^^^^ 942 s ligada
+RX 91 94 C9 00 00 B1 A4 32 00 07 DB 07 00 6F 6D 01 00 3B DE 05 00 82 82 00 00
+      ^^^^^^^^^^^^^ 51.604 -> 516,04 km   ^^^^^^^^^^^^^ 3.318.961 s -> 921,9 h ligada
+```
+
+Observações:
+- A viagem (`0x90`) **zera ao desligar** a roda (é por sessão de uso); o total (`0x91`) é permanente.
+- O contador de tempo do quadro de viagem incrementa 1 por segundo (confirmado em captura).
+- A V11y responde aos dois quadros; modelos que não responderem devolvem `null` no parser.
+
 ## 7. Bateria V2
 
 **[APK]** EUC World consulta por pack: `02 24 01/02`, `02 25 …`, `02 26 …`, `02 27 …` (tipo `0x16`).

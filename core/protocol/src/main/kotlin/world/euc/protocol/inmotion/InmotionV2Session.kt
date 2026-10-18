@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import world.euc.protocol.link.WheelLink
 import world.euc.protocol.model.WheelSettings
+import world.euc.protocol.model.WheelStatistics
 import world.euc.protocol.model.WheelTelemetry
 import java.util.concurrent.atomic.AtomicReference
 
@@ -38,6 +39,7 @@ class InmotionV2Session(
     private val reader = InmotionV2FrameReader()
     private val telemetryParser = InmotionV2TelemetryParser()
     private val settingsParser = InmotionV2SettingsParser()
+    private val statisticsParser = InmotionV2StatisticsParser()
     private val queue = Channel<QueuedCommand>(config.queueCapacity)
     private val responseWaiter = AtomicReference<ResponseWaiter?>(null)
     private val authKeyChannel = AtomicReference<Channel<ByteArray>?>(null)
@@ -125,6 +127,13 @@ class InmotionV2Session(
         InmotionV2Responses.parseFirmwareVersions(frame)?.let { versions ->
             _events.tryEmit(SessionEvent.FirmwareReceived(versions))
         }
+        statisticsParser.parse(frame)?.let { statistics ->
+            config.logger?.invoke(
+                "odômetro: viagem=${statistics.tripKm} km total=${statistics.totalKm} km " +
+                    "horas=${statistics.totalHours}",
+            )
+            _events.tryEmit(SessionEvent.StatisticsReceived(statistics))
+        }
         settingsParser.parse(frame)?.let { settings ->
             config.logger?.invoke(
                 "settings parseados: limite=${settings.speedLimitKmh} tilt=${settings.pedalTiltDegrees} " +
@@ -144,6 +153,10 @@ class InmotionV2Session(
                     delay(config.controlSettleMillis)
                 }
                 is QueuedCommand.Query -> executeWithRetry(queued.command)
+                is QueuedCommand.Poll -> {
+                    writeFrame(queued.command)
+                    delay(config.controlSettleMillis)
+                }
                 QueuedCommand.Authenticate -> performAuthentication()
             }
         }
@@ -199,15 +212,34 @@ class InmotionV2Session(
     }
 
     private suspend fun pollLoop() {
+        var tick = 0L
         while (currentCoroutineContext().isActive) {
             delay(config.pollIntervalMillis)
             queue.trySend(QueuedCommand.Query(InmotionV2Commands.readValues()))
+
+            // Odômetros mudam devagar: viagem a cada poucos segundos, totais
+            // bem mais raramente (o firmware pode nem responder aos quadros).
+            if (tick % config.tripPollEveryTicks == 0L) {
+                queue.trySend(QueuedCommand.Poll(InmotionV2Commands.readTrip()))
+            }
+            if (tick % config.totalPollEveryTicks == 0L) {
+                queue.trySend(QueuedCommand.Poll(InmotionV2Commands.readTotalStatistics()))
+            }
+            tick += 1
         }
     }
 
     private sealed interface QueuedCommand {
         data class Control(val command: InmotionCommand) : QueuedCommand
         data class Query(val command: InmotionCommand) : QueuedCommand
+
+        /**
+         * Consulta periódica que **não espera** resposta dedicada: a resposta
+         * é tratada ao chegar (evita timeouts empilhando na fila quando o
+         * firmware não responde a algum quadro, como o de odômetro).
+         */
+        data class Poll(val command: InmotionCommand) : QueuedCommand
+
         data object Authenticate : QueuedCommand
     }
 
@@ -230,6 +262,10 @@ data class SessionConfig(
     val authTimeoutMillis: Long = 2_000,
     val maxAttempts: Int = 3,
     val pollIntervalMillis: Long = 500,
+    /** Consulta da viagem da roda: 1 a cada N ciclos de polling (4 = 2 s). */
+    val tripPollEveryTicks: Long = 4,
+    /** Consulta dos totais da roda: 1 a cada N ciclos de polling (20 = 10 s). */
+    val totalPollEveryTicks: Long = 20,
     val queueCapacity: Int = 32,
     /** Recebe linhas de diagnóstico (hex de TX/RX e handshake). */
     val logger: ((String) -> Unit)? = null,
@@ -252,6 +288,9 @@ sealed interface SessionEvent {
 
     /** Configurações da roda recebidas (apenas os campos reportados). */
     data class SettingsReceived(val settings: WheelSettings) : SessionEvent
+
+    /** Odômetros (viagem/totais) recebidos — apenas os campos reportados. */
+    data class StatisticsReceived(val statistics: WheelStatistics) : SessionEvent
 
     /** Handshake de autenticação concluído (ou não). */
     data class AuthenticationCompleted(val success: Boolean) : SessionEvent

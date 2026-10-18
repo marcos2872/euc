@@ -6,6 +6,7 @@ import world.euc.protocol.inmotion.FirmwareVersions
 import world.euc.protocol.inmotion.InmotionModelInfo
 import world.euc.protocol.model.WheelCapabilities
 import world.euc.protocol.model.WheelSettings
+import world.euc.protocol.model.WheelStatistics
 import world.euc.protocol.model.WheelTelemetry
 
 /** Estado observável da conexão e da telemetria para a UI. */
@@ -19,6 +20,12 @@ data class WheelUiState(
     val settings: WheelSettings = WheelSettings(),
     /** Configurações que a roda não reporta — mantidas pelo app. */
     val local: LocalSettings = LocalSettings(),
+    /** Odômetros reportados pela roda (viagem/totais), quando o firmware reporta. */
+    val statistics: WheelStatistics = WheelStatistics(),
+    /** Distância desde a conexão atual, em km (viagem da sessão). */
+    val sessionTripKm: Double = 0.0,
+    /** Odômetro acumulado pelo app para esta roda, em km (fallback do total). */
+    val appOdometerKm: Double = 0.0,
     /** Relógio da última leitura recebida (0 = nenhuma). */
     val lastTelemetryAtMillis: Long = 0L,
     /** Configuração dos alarmes (persistida no aparelho). */

@@ -44,6 +44,7 @@ class WheelConnectionManager(context: Context) {
     private val alarmConfigStore = AlarmConfigStore(context.applicationContext)
     private val localSettingsStore = LocalSettingsStore(context.applicationContext)
     private val alarmEngine = AlarmEngine()
+    private val tripComputer = SessionTripComputer()
     private val alarmNotifier = AlarmNotifier(context.applicationContext)
     private var alarmConfig = alarmConfigStore.load()
 
@@ -65,6 +66,7 @@ class WheelConnectionManager(context: Context) {
     private var eventsJob: Job? = null
     private var connectionWatchJob: Job? = null
     private var reappliedThisConnection = false
+    private var wheelKey: String? = null
 
     /** Escaneia rodas próximas, emitindo cada descoberta. */
     fun scan(timeoutMillis: Long = DEFAULT_SCAN_MILLIS): Flow<DiscoveredWheel> =
@@ -88,6 +90,7 @@ class WheelConnectionManager(context: Context) {
             )
             session = newSession
             reappliedThisConnection = false
+            tripComputer.reset()
             eventsJob = scope.launch { newSession.events.collect(::onSessionEvent) }
             sessionJob = newSession.start(scope)
             startConnectionWatch()
@@ -103,6 +106,7 @@ class WheelConnectionManager(context: Context) {
 
     /** Encerra a sessão e a conexão GATT. */
     fun disconnect() {
+        persistOdometer()
         eventsJob?.cancel()
         sessionJob?.cancel()
         connectionWatchJob?.cancel()
@@ -281,6 +285,18 @@ class WheelConnectionManager(context: Context) {
         localSettingsStore.saveLocal(_state.value.local)
     }
 
+    /**
+     * Soma a viagem da sessão ao odômetro acumulado da roda (para modelos que
+     * não reportam a quilometragem total).
+     */
+    private fun persistOdometer() {
+        val key = wheelKey ?: return
+        val distance = tripComputer.distanceKm
+        if (distance <= 0.0) return
+        localSettingsStore.addOdometerKm(key, distance)
+        _state.update { it.copy(appOdometerKm = localSettingsStore.odometerKm(key)) }
+    }
+
     /** Liga/desliga a reaplicação das configurações salvas ao conectar. */
     fun setReapplyOnConnect(enabled: Boolean) {
         localSettingsStore.reapplyOnConnect = enabled
@@ -296,8 +312,14 @@ class WheelConnectionManager(context: Context) {
     private fun onSessionEvent(event: SessionEvent) {
         when (event) {
             is SessionEvent.TelemetryReceived -> {
+                val now = System.currentTimeMillis()
+                tripComputer.integrate(event.telemetry.speedKmh, now)
                 _state.update {
-                    it.copy(telemetry = event.telemetry, lastTelemetryAtMillis = System.currentTimeMillis())
+                    it.copy(
+                        telemetry = event.telemetry,
+                        lastTelemetryAtMillis = now,
+                        sessionTripKm = tripComputer.distanceKm,
+                    )
                 }
                 evaluateAlarms(event.telemetry)
             }
@@ -307,12 +329,27 @@ class WheelConnectionManager(context: Context) {
                     capabilities = InmotionV2Capabilities.forModel(event.model.model),
                 )
             }
-            is SessionEvent.SerialNumberReceived -> _state.update { it.copy(serialNumber = event.serialNumber) }
+            is SessionEvent.SerialNumberReceived -> {
+                wheelKey = event.serialNumber
+                val odometer = localSettingsStore.odometerKm(event.serialNumber)
+                _state.update {
+                    it.copy(serialNumber = event.serialNumber, appOdometerKm = odometer)
+                }
+            }
             is SessionEvent.FirmwareReceived -> _state.update { it.copy(firmware = event.versions) }
             is SessionEvent.SettingsReceived -> {
                 _state.update { it.copy(settings = it.settings.mergedWith(event.settings)) }
                 localSettingsStore.saveWheelSettings(_state.value.settings)
                 scope.launch { maybeReapplySettings() }
+            }
+            is SessionEvent.StatisticsReceived -> {
+                tripComputer.updateWheelTrip(event.statistics.tripKm)
+                _state.update {
+                    it.copy(
+                        statistics = it.statistics.mergedWith(event.statistics),
+                        sessionTripKm = tripComputer.distanceKm,
+                    )
+                }
             }
             is SessionEvent.AuthenticationCompleted -> _state.update { it.copy(authenticated = event.success) }
             is SessionEvent.CommandTimedOut -> Unit // observabilidade futura (log de depuração)

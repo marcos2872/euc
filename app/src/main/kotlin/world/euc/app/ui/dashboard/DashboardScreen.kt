@@ -101,6 +101,7 @@ fun DashboardScreen(
                 AlarmBanner(alarm.type.name, alarm.value)
             }
             SpeedCard(state.telemetry)
+            DistanceCard(state)
             BatteryCard(state.telemetry)
             StatsCard(state.telemetry)
             QuickActionsCard(
@@ -156,6 +157,41 @@ private fun SpeedCard(telemetry: WheelTelemetry) {
             Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 LabelledValue("Limite", telemetry.speedLimitKmh.let { "${it.format(0)} km/h" })
                 LabelledValue("Margem", telemetry.safetyMarginPercent.let { "${it.format(0)} %" })
+            }
+        }
+    }
+}
+
+/**
+ * Distâncias: viagem da sessão (zera a cada conexão) e quilometragem total.
+ *
+ * O total vem do odômetro da própria roda quando o firmware reporta; senão,
+ * do acumulado pelo app (somado a cada desconexão).
+ */
+@Composable
+private fun DistanceCard(state: WheelUiState) {
+    val reportedTotal = state.statistics.totalKm
+    val total = reportedTotal ?: state.appOdometerKm
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                LabelledValue(
+                    "Viagem (sessão)",
+                    String.format(Locale.getDefault(), "%.2f km", state.sessionTripKm),
+                )
+                LabelledValue(
+                    if (reportedTotal != null) "Total (roda)" else "Total (app)",
+                    String.format(Locale.getDefault(), "%.2f km", total),
+                )
+            }
+            state.statistics.totalHours?.let { hours ->
+                LabelledValue(
+                    "Tempo ligada",
+                    String.format(Locale.getDefault(), "%.0f h", hours),
+                )
             }
         }
     }
