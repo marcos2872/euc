@@ -13,6 +13,8 @@ data class WheelSettings(
     val pedalTiltDegrees: Double? = null,
     /** Sensibilidade dos pedais, em %. */
     val pedalSensitivityPercent: Int? = null,
+    /** Modo de condução (0 = comfort, 1 = classic), quando reportado. */
+    val ridingMode: Int? = null,
     /** Modos de condução separados (aceleração/frenagem independentes). */
     val splitRidingModesEnabled: Boolean? = null,
     val splitRidingAccelerationPercent: Int? = null,

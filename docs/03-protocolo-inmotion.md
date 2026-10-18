@@ -243,6 +243,21 @@ Regra implementada em `InmotionV2Commands.hornFor(model)`.
 **Lock em V12+:** o firmware ignora o lock em framing DEFAULT — é obrigatório usar
 EXTENDED (`AA AA 16 05 02 21 60 31 01 CK`). Implementado em `lock(locked, extended = true)`.
 
+## 9.2 O que a V11y NÃO suporta (evidência das telas do EUC World)
+
+As telas de configuração do EUC World por modelo mostram o que funciona na prática:
+
+| Opção | V11y | V13/V14 | V12 | V9/V12S |
+|---|---|---|---|---|
+| Tilt lateral estendido | ❌ não | ✅ | ❌ | ❌ |
+| DRL + brilho + ventilador | ✅ | ❌ (usa farol automático) | ❌ | ✅ |
+| Alarmes de velocidade | ❌ | ❌ | ✅ | ✅ |
+| Lock | ✅ (ação rápida, não na tela) | ✅ | ✅ | ✅ |
+| Farol automático (limiares) | ❌ | ✅ | ✅ | ❌ |
+
+O app novo filtra a tela por `InmotionV2Capabilities.forModel()`, então opções não
+suportadas não aparecem (evita comandos ignorados silenciosamente).
+
 ## 10. Apêndice A — V11Y: settings ↔ protocolo (mapa completo)
 
 Tela de configurações do V11y em `res/xml/preferences_wheel_inmotion_new_v11y.xml`.

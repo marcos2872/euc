@@ -4,6 +4,7 @@ import world.euc.protocol.alarm.AlarmConfig
 import world.euc.protocol.alarm.AlarmEvent
 import world.euc.protocol.inmotion.FirmwareVersions
 import world.euc.protocol.inmotion.InmotionModelInfo
+import world.euc.protocol.model.WheelCapabilities
 import world.euc.protocol.model.WheelSettings
 import world.euc.protocol.model.WheelTelemetry
 
@@ -26,6 +27,8 @@ data class WheelUiState(
     val activeAlarm: AlarmEvent? = null,
     /** Resultado do handshake de autenticação (null = em andamento). */
     val authenticated: Boolean? = null,
+    /** O que o modelo conectado suporta (a UI mostra apenas isso). */
+    val capabilities: WheelCapabilities = WheelCapabilities(emptySet()),
 )
 
 /**

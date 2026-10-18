@@ -1,0 +1,114 @@
+package world.euc.protocol.inmotion
+
+import world.euc.protocol.model.WheelCapabilities
+import world.euc.protocol.model.WheelSettingId
+
+/**
+ * Capacidades por modelo da família Inmotion V2.
+ *
+ * Baseadas nas telas de configuração do EUC World 2.66.0 (o que o app expõe
+ * por modelo = o que funciona na prática) e na referência comunitária do
+ * eucplanet para lock e handshake.
+ *
+ * Observações:
+ * - **Tilt lateral estendido** só é exposto para V13/V14 — a V11y não suporta.
+ * - **Lock** não aparece nas telas do EUC World (é ação rápida), mas é
+ *   suportado na V11y/V13/V14 via framing estendido + autenticação.
+ * - V13/V14 usam farol automático no lugar de DRL/brilho/ventilador.
+ */
+object InmotionV2Capabilities {
+
+    private val COMUM = setOf(
+        WheelSettingId.SPEED_LIMIT,
+        WheelSettingId.PEDAL_TILT,
+        WheelSettingId.PEDAL_SENSITIVITY,
+        WheelSettingId.TRANSPORTATION_MODE,
+        WheelSettingId.CALIBRATION,
+    )
+
+    private val V11Y = COMUM + setOf(
+        WheelSettingId.RIDING_MODE,
+        WheelSettingId.SPLIT_RIDING_MODES,
+        WheelSettingId.PERFORMANCE_MODE,
+        WheelSettingId.LOW_BATTERY_RIDING,
+        WheelSettingId.MOTOR_NO_LOAD_DETECTION,
+        WheelSettingId.HANDLE_BUTTON,
+        WheelSettingId.HEADLIGHT,
+        WheelSettingId.HEADLIGHT_BRIGHTNESS,
+        WheelSettingId.DAYTIME_RUNNING_LIGHTS,
+        WheelSettingId.SPEAKER_VOLUME,
+        WheelSettingId.COOLING_FAN,
+        WheelSettingId.COOLING_FAN_QUIET_MODE,
+        WheelSettingId.LOCK,
+    )
+
+    private val V11 = V11Y
+
+    private val V13_V14 = COMUM + setOf(
+        WheelSettingId.SPLIT_RIDING_MODES,
+        WheelSettingId.SPEAKER_VOLUME,
+        WheelSettingId.LOCK,
+        WheelSettingId.EXTENDED_LATERAL_TILT_LIMIT,
+    )
+
+    private val V12 = COMUM + setOf(
+        WheelSettingId.RIDING_MODE,
+        WheelSettingId.SPEED_ALARMS,
+        WheelSettingId.SPLIT_RIDING_MODES,
+        WheelSettingId.PERFORMANCE_MODE,
+        WheelSettingId.LOW_BATTERY_RIDING,
+        WheelSettingId.HANDLE_BUTTON,
+        WheelSettingId.HEADLIGHT,
+        WheelSettingId.HEADLIGHT_BRIGHTNESS,
+        WheelSettingId.SPEAKER_VOLUME,
+        WheelSettingId.LOCK,
+    )
+
+    private val V9_V12S = COMUM + setOf(
+        WheelSettingId.RIDING_MODE,
+        WheelSettingId.SPLIT_RIDING_MODES,
+        WheelSettingId.SPEED_ALARMS,
+        WheelSettingId.LOW_BATTERY_RIDING,
+        WheelSettingId.MOTOR_NO_LOAD_DETECTION,
+        WheelSettingId.HANDLE_BUTTON,
+        WheelSettingId.HEADLIGHT,
+        WheelSettingId.HEADLIGHT_BRIGHTNESS,
+        WheelSettingId.DAYTIME_RUNNING_LIGHTS,
+        WheelSettingId.SPEAKER_VOLUME,
+        WheelSettingId.LOCK,
+    )
+
+    private val P6 = COMUM + setOf(
+        WheelSettingId.RIDING_MODE,
+        WheelSettingId.SPLIT_RIDING_MODES,
+        WheelSettingId.SPEED_ALARMS,
+        WheelSettingId.LOW_BATTERY_RIDING,
+        WheelSettingId.MOTOR_NO_LOAD_DETECTION,
+        WheelSettingId.HANDLE_BUTTON,
+        WheelSettingId.HEADLIGHT,
+        WheelSettingId.DAYTIME_RUNNING_LIGHTS,
+        WheelSettingId.SPEAKER_VOLUME,
+        WheelSettingId.LOCK,
+    )
+
+    /** Capacidades do modelo; sem modelo detectado assume o conjunto da V11y. */
+    fun forModel(model: InmotionModel?): WheelCapabilities = WheelCapabilities(
+        when (model) {
+            InmotionModel.V11 -> V11
+            InmotionModel.V11Y -> V11Y
+            InmotionModel.V12 -> V12
+            InmotionModel.V12S -> V9_V12S
+            InmotionModel.V13, InmotionModel.V14 -> V13_V14
+            InmotionModel.V9 -> V9_V12S
+            InmotionModel.P6 -> P6
+            InmotionModel.E20 -> COMUM + setOf(
+                WheelSettingId.RIDING_MODE,
+                WheelSettingId.SPEED_ALARMS,
+                WheelSettingId.MOTOR_NO_LOAD_DETECTION,
+                WheelSettingId.HEADLIGHT,
+                WheelSettingId.HEADLIGHT_BRIGHTNESS,
+            )
+            InmotionModel.UNKNOWN, null -> V11Y
+        },
+    )
+}

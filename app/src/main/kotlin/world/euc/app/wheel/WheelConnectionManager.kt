@@ -25,6 +25,7 @@ import world.euc.protocol.discovery.WheelProtocol
 import world.euc.protocol.inmotion.InmotionCommand
 import world.euc.protocol.inmotion.InmotionV2Commands
 import world.euc.protocol.inmotion.InmotionModel
+import world.euc.protocol.inmotion.InmotionV2Capabilities
 import world.euc.protocol.inmotion.InmotionV2Session
 import world.euc.protocol.inmotion.SessionConfig
 import world.euc.protocol.inmotion.SessionEvent
@@ -145,6 +146,12 @@ class WheelConnectionManager(context: Context) {
     suspend fun setPedalSensitivity(percent: Int) {
         send(InmotionV2Commands.pedalSensitivity(percent))
         updateSettings { it.copy(pedalSensitivityPercent = percent.coerceIn(0, 100)) }
+    }
+
+    /** Define o modo de condução (0 = comfort, 1 = classic). */
+    suspend fun setRidingMode(mode: Int) {
+        send(InmotionV2Commands.ridingMode(mode))
+        updateSettings { it.copy(ridingMode = mode) }
     }
 
     /** Liga/desliga os modos de condução separados. */
@@ -268,7 +275,12 @@ class WheelConnectionManager(context: Context) {
                 }
                 evaluateAlarms(event.telemetry)
             }
-            is SessionEvent.ModelIdentified -> _state.update { it.copy(model = event.model) }
+            is SessionEvent.ModelIdentified -> _state.update {
+                it.copy(
+                    model = event.model,
+                    capabilities = InmotionV2Capabilities.forModel(event.model.model),
+                )
+            }
             is SessionEvent.SerialNumberReceived -> _state.update { it.copy(serialNumber = event.serialNumber) }
             is SessionEvent.FirmwareReceived -> _state.update { it.copy(firmware = event.versions) }
             is SessionEvent.SettingsReceived -> _state.update {
@@ -284,6 +296,7 @@ class WheelConnectionManager(context: Context) {
         speedLimitKmh = reported.speedLimitKmh ?: speedLimitKmh,
         pedalTiltDegrees = reported.pedalTiltDegrees ?: pedalTiltDegrees,
         pedalSensitivityPercent = reported.pedalSensitivityPercent ?: pedalSensitivityPercent,
+        ridingMode = reported.ridingMode ?: ridingMode,
         splitRidingModesEnabled = reported.splitRidingModesEnabled ?: splitRidingModesEnabled,
         splitRidingAccelerationPercent = reported.splitRidingAccelerationPercent ?: splitRidingAccelerationPercent,
         splitRidingBrakingPercent = reported.splitRidingBrakingPercent ?: splitRidingBrakingPercent,
