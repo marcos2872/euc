@@ -47,13 +47,15 @@ class WheelConnectionManager(context: Context) {
     private val alarmNotifier = AlarmNotifier(context.applicationContext)
     private var alarmConfig = alarmConfigStore.load()
 
-    private val _state = MutableStateFlow(
-        WheelUiState(
-            alarmConfig = alarmConfig,
-            settings = localSettingsStore.loadWheelSettings(),
-            local = localSettingsStore.loadLocal(),
-            reapplyOnConnect = localSettingsStore.reapplyOnConnect,
-        ),
+    private val _state = MutableStateFlow(initialState())
+
+    /** Estado inicial (e ao desconectar): só o que é persistido no aparelho. */
+    private fun initialState() = WheelUiState(
+        alarmConfig = alarmConfig,
+        settings = localSettingsStore.loadWheelSettings(),
+        local = localSettingsStore.loadLocal(),
+        reapplyOnConnect = localSettingsStore.reapplyOnConnect,
+        csvLogging = localSettingsStore.csvLogging,
     )
     val state: StateFlow<WheelUiState> = _state.asStateFlow()
 
@@ -110,12 +112,7 @@ class WheelConnectionManager(context: Context) {
         connectionWatchJob = null
         session = null
         link = null
-        _state.value = WheelUiState(
-            alarmConfig = alarmConfig,
-            settings = localSettingsStore.loadWheelSettings(),
-            local = localSettingsStore.loadLocal(),
-            reapplyOnConnect = localSettingsStore.reapplyOnConnect,
-        )
+        _state.value = initialState()
     }
 
     // ------------------------------------------------------------ ações rápidas
@@ -288,6 +285,12 @@ class WheelConnectionManager(context: Context) {
     fun setReapplyOnConnect(enabled: Boolean) {
         localSettingsStore.reapplyOnConnect = enabled
         _state.update { it.copy(reapplyOnConnect = enabled) }
+    }
+
+    /** Liga/desliga a gravação do log CSV de telemetria. */
+    fun setCsvLogging(enabled: Boolean) {
+        localSettingsStore.csvLogging = enabled
+        _state.update { it.copy(csvLogging = enabled) }
     }
 
     private fun onSessionEvent(event: SessionEvent) {

@@ -31,6 +31,8 @@ data class WheelUiState(
     val capabilities: WheelCapabilities = WheelCapabilities(emptySet()),
     /** Reaplicar as configurações salvas na roda a cada conexão. */
     val reapplyOnConnect: Boolean = false,
+    /** Gravar um log CSV da telemetria durante a sessão. */
+    val csvLogging: Boolean = false,
 )
 
 /**

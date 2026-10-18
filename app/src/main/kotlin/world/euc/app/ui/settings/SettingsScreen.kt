@@ -37,6 +37,10 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import world.euc.app.wheel.WheelConnectionManager
 import world.euc.app.wheel.WheelUiState
+import world.euc.app.ui.components.ChoiceRow
+import world.euc.app.ui.components.SectionCard
+import world.euc.app.ui.components.SliderRow
+import world.euc.app.ui.components.SwitchRow
 import world.euc.protocol.model.WheelSettingId
 import kotlin.math.roundToInt
 
@@ -53,6 +57,7 @@ fun SettingsScreen(
     manager: WheelConnectionManager,
     state: WheelUiState,
     onBack: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val settings = state.settings
@@ -297,6 +302,15 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            SectionCard("Aplicativo") {
+                OutlinedButton(
+                    onClick = onOpenAbout,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Sobre e diagnóstico")
+                }
+            }
         }
     }
 
@@ -324,97 +338,5 @@ fun SettingsScreen(
         )
     }
 }
-
-@Composable
-private fun SectionCard(title: String, content: @Composable () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            content()
-        }
-    }
-}
-
-@Composable
-private fun SwitchRow(
-    label: String,
-    checked: Boolean,
-    description: String? = null,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            description?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-private fun SliderRow(
-    label: String,
-    value: Float,
-    valueRange: ClosedFloatingPointRange<Float>,
-    unit: String,
-    decimals: Int = 0,
-    onCommit: (Float) -> Unit,
-) {
-    var local by remember(value) { mutableFloatStateOf(value) }
-
-    Column {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-            Text(
-                formatValue(local, decimals) + unit,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Slider(
-            value = local,
-            onValueChange = { local = it },
-            onValueChangeFinished = { onCommit(local) },
-            valueRange = valueRange,
-        )
-    }
-}
-
-/** Escolha entre poucas opções, em chips. */
-@Composable
-private fun <T> ChoiceRow(
-    label: String,
-    options: List<Pair<T, String>>,
-    selected: T,
-    onSelect: (T) -> Unit,
-) {
-    Column {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { (value, text) ->
-                FilterChip(
-                    selected = value == selected,
-                    onClick = { onSelect(value) },
-                    label = { Text(text) },
-                )
-            }
-        }
-    }
-}
-
-private fun formatValue(value: Float, decimals: Int): String =
-    if (decimals == 0) value.roundToInt().toString() else String.format("%.${decimals}f", value)
 
 private const val DEFAULT_SPEED_LIMIT = 25.0

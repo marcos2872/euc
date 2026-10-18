@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import world.euc.app.wheel.ConnectionState
 import world.euc.app.wheel.WheelConnectionManager
+import world.euc.app.ui.components.LabelledValue
+import world.euc.app.ui.components.format
 import world.euc.app.wheel.WheelUiState
 import world.euc.protocol.model.WheelTelemetry
 import java.util.Locale
@@ -254,16 +256,5 @@ private fun FreshnessHint(state: WheelUiState) {
         },
     )
 }
-
-@Composable
-private fun LabelledValue(label: String, value: String) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleMedium)
-    }
-}
-
-private fun Double?.format(decimals: Int): String =
-    this?.let { String.format(Locale.getDefault(), "%.${decimals}f", it) } ?: "—"
 
 private const val STALE_AFTER_MILLIS = 3_000L

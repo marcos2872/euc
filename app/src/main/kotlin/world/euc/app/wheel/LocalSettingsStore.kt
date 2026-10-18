@@ -83,6 +83,11 @@ class LocalSettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_REAPPLY, false)
         set(value) = prefs.edit { putBoolean(KEY_REAPPLY, value) }
 
+    /** Gravar um log CSV da telemetria a cada sessão de conexão. */
+    var csvLogging: Boolean
+        get() = prefs.getBoolean(KEY_CSV_LOGGING, false)
+        set(value) = prefs.edit { putBoolean(KEY_CSV_LOGGING, value) }
+
     private companion object {
         const val ABSENT_FLOAT = Float.NaN
         const val ABSENT_INT = Int.MIN_VALUE
@@ -110,5 +115,6 @@ class LocalSettingsStore(context: Context) {
         const val KEY_EXTENDED_TILT = "extended_tilt"
 
         const val KEY_REAPPLY = "reapply_on_connect"
+        const val KEY_CSV_LOGGING = "csv_logging"
     }
 }
