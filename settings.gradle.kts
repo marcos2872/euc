@@ -23,3 +23,6 @@ include(":core:protocol")
 
 // Transporte Bluetooth LE (Android) — implementa a porta WheelLink
 include(":core:ble")
+
+// App Android (Jetpack Compose)
+include(":app")
