@@ -59,10 +59,14 @@
 3. TTS com mensagens (velocidade, bateria, distância, tempo, status), intervalos configuráveis.
 
 ### Fase 4 — Tours e dados
-1. Gravação de tour com GPS (Room), mapa ao vivo, estatísticas do tour.
-2. CSV logging com colunas equivalentes.
-3. Gráficos (velocidade/corrente/tensão/temperatura/potência no tempo).
-4. Exportação/importação (JSON de tour).
+**Status:** concluída em 18/10/2026, com duas diferenças do plano: **sem Room** (passeios em
+arquivo de texto simples, `filesDir/tours/<id>.tour`) e mapa com tiles do OpenStreetMap
+desenhados em Canvas, sem biblioteca externa. Detalhes dos formatos em
+`docs/05-dados-tours-nuvem.md` §7.
+1. ✅ Gravação de passeio com GPS (1 Hz), mapa ao vivo, estatísticas e histórico.
+2. ✅ Log CSV com as 46 colunas do EUC World (um arquivo por sessão de conexão).
+3. ✅ Gráficos por série: velocidade, corrente, tensão, potência, temperatura e altitude.
+4. ⏳ Exportação/importação JSON — hoje o compartilhamento é CSV; importar fica para depois.
 
 ### Fase 5 — Extras (opcional, conforme uso)
 1. Webserver local de valores (JSON) + BLE server.
@@ -80,9 +84,14 @@
 | Firmware varia (V11y tem revisões) | Detectar versão (`INIT_FIRMWARE`) e condicionar comandos (ex.: fan `96 53` vs `96 43` em fw ≥1.4) |
 | Perda de contexto entre sessões | Documentação em `docs/` + memórias do projeto + evidências em `analysis/` |
 
-## 5. Próximo passo imediato
+## 5. Situação e próximos passos
 
-1. Criar o projeto Gradle (`:app` + módulos) com Compose e Hilt.
-2. Implementar `:core:protocol` (framing + Inmotion V2) com testes unitários.
+Fases 1 a 4 implementadas e em uso na V11y real (107 testes em `:core:protocol` + `:app`).
+
+Pendências conhecidas:
+1. Validar em uso real: gravação de passeio com a tela apagada, precisão da distância do GPS
+   e o comportamento do log CSV em sessões longas.
+2. Importar passeios (JSON) e, se fizer sentido, exportar GPX.
+3. Fase 5 conforme o uso: webserver local, TPMS/radar, controle de carregador, sync com nuvem.
 3. Implementar `:core:ble` (scan/connect/GATT).
 4. Primeira tela: conexão + telemetria ao vivo.

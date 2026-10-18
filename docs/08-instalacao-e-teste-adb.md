@@ -155,7 +155,25 @@ $ADB shell am force-stop world.euc.app && $ADB shell am start -n world.euc.app/.
 
 # Capturar um log completo para enviar em caso de problema
 $ADB logcat -d > /tmp/euc-logcat.txt
+
+# Passeios gravados e logs CSV (dentro do sandbox do app)
+$ADB shell run-as world.euc.app ls -l files/tours files/logs
+$ADB exec-out run-as world.euc.app cat files/tours/2026-10-18-143012.tour > /tmp/opencode/tour.tour
+$ADB exec-out run-as world.euc.app cat files/logs/euc-log-20261018-143012.csv > /tmp/opencode/log.csv
 ```
+
+### Passeios e log CSV
+
+- Permissões: a gravação pede **localização** (GPS) e, no Android 13+, **notificações**
+  (a notificação do serviço em primeiro plano).
+- Com a tela apagada o app mantém um **serviço em primeiro plano** — no MIUI/HyperOS vale
+  liberar "Iniciar automaticamente" e "Sem restrições" de bateria para o app, senão o
+  sistema pode encerrar a gravação em segundo plano.
+- O GPS precisa estar ligado; com o provedor desligado a tela avisa e o passeio fica sem
+  pontos (a telemetria continua no log CSV, se estiver ligada).
+- Os arquivos ficam em `files/tours` e `files/logs` (privados do app). Dá para tirar do
+  celular com `run-as` (acima) ou compartilhar pelo próprio app (Sobre e diagnóstico →
+  compartilhar log; detalhe do passeio → compartilhar CSV).
 
 ## 8. Referências no projeto
 

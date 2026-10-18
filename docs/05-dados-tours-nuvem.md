@@ -113,7 +113,52 @@ title, distance (km), duration(s), durationRiding(s), timestamps em **segundos**
 - WS `/values`: cliente assina `{"values":["id1",...]}`; push com debounce 250 ms a cada mudança.
 - IDs de valores = catálogo de 223 slots (ver `analysis/06-catalogo-valores.txt`).
 
-## 7. Lacunas
+## 7. No app euc (este projeto)
+
+O app pessoal implementa a Fase 4 com formatos próprios, simples e inspecionáveis —
+sem banco de dados, sem nuvem e sem biblioteca de mapas.
+
+### 7.1 Passeios (`filesDir/tours/<id>.tour`)
+
+Texto plano: linhas `chave=valor`, depois o cabeçalho de colunas e uma linha CSV por ponto.
+
+| Chave | Conteúdo |
+|---|---|
+| `id` | `yyyy-MM-dd-HHmmss` (também é o nome do arquivo) |
+| `name` | `Passeio de dd/MM HH:mm` |
+| `started` / `ended` | epoch em ms |
+| `model` | modelo detectado (ex.: `V11Y`) |
+| `distance` / `maxspeed` / `points` | resumo, para listar sem abrir os pontos |
+
+Colunas dos pontos: `time,lat,lon,speed,alt,battery,voltage,current,power,temp,distance`
+(lat/lon com 7 casas; km com 3; km/h, V e A com 2; potência e bateria inteiras; vazio = ausente).
+
+- Amostragem de 1 Hz: fix do GPS + telemetria do instante.
+- Descarta fix com precisão > 25 m e movimento < 1 m (ruído com a roda parada), como o EUC World.
+- Velocidade do ponto: a da roda quando existe (mais fiel que a do GPS).
+- Autosave a cada 30 s; o botão compartilhar exporta CSV (cache + FileProvider).
+
+### 7.2 Log de telemetria (`filesDir/logs/euc-log-<timestamp>.csv`)
+
+Um arquivo por sessão de conexão, com **as 46 colunas, a ordem e os formatos do EUC World**
+(§3): separador vírgula, CRLF, campos ausentes vazios. Diferença de fuso: `datetime` sai como
+`yyyy-MM-dd'T'HH:mm:ss.SSS` em hora local (o original anexa o offset). As colunas `gps_*` são
+preenchidas quando há fix de GPS.
+
+### 7.3 GPS
+
+`GpsTracker` usa o provedor **GPS puro a 1 Hz** (sem Fused/Play Services), compartilhado por
+gravação e log através de contagem de uso — só liga enquanto há interessado. A gravação roda
+em serviço em primeiro plano (`TourRecordingService`, tipo `location`) com notificação de
+acompanhamento e ação "Parar", então continua com a tela apagada.
+
+### 7.4 Mapa
+
+Tiles raster do OpenStreetMap desenhados direto em `Canvas` (projeção Web Mercator, cache em
+memória + disco), sem biblioteca de mapas e sem chave de API. Atribuição "© OpenStreetMap"
+na tela; uso pessoal, com `User-Agent` identificando o app.
+
+## 8. Lacunas
 
 1. Semântica de parâmetros de 1 letra em respostas (`d` em `/api/tour`, `k/f/i/t` em syncTour).
 2. WS `/gauge` não detalhado (existe, com `GaugeResponse/GaugeConfigResponse/GaugeFieldsResponse`).
