@@ -99,7 +99,7 @@ fun SettingsScreen(
                 if (WheelSettingId.RIDING_MODE in capabilities) {
                     ChoiceRow(
                         label = "Modo de condução",
-                        options = listOf(0 to "Comfort", 1 to "Classic"),
+                        options = listOf(0 to "Comfort", 1 to "Sport"),
                         selected = settings.ridingMode ?: 1,
                         onSelect = { scope.launch { manager.setRidingMode(it) } },
                     )

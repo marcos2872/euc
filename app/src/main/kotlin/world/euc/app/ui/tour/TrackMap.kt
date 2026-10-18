@@ -199,6 +199,17 @@ fun TrackMap(
             viewport = viewport,
         )
 
+        if (center == null) {
+            Text(
+                "Aguardando sinal de GPS para mostrar o mapa…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(16.dp),
+            )
+        }
+
         if (showZoomButtons) {
             MapControls(
                 modifier = Modifier

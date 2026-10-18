@@ -49,12 +49,20 @@ class TourRecordingService : Service() {
             return START_NOT_STICKY
         }
 
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            notification(recorder.state.value),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
-        )
+        val started = runCatching {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification(recorder.state.value),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+            )
+        }.isSuccess
+        if (!started) {
+            // Sistema recusou o serviço em primeiro plano (permissão de localização,
+            // por exemplo): a gravação continua enquanto o app estiver aberto.
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         scope.launch {
             recorder.state.collect { state ->
