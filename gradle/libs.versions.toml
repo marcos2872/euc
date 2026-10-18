@@ -2,14 +2,17 @@
 # Regra: nenhuma versão de dependência deve ser declarada fora deste arquivo.
 
 [versions]
-kotlin = "2.2.0"
-agp = "8.13.2"
-coroutines = "1.10.2"
+# Toolchain: Gradle 9.8.1 (wrapper) + AGP 9.4.1 (Kotlin embutido).
+# O KGP é fixado em 2.4.21 no buildscript da raiz (build.gradle.kts) porque o
+# AGP 9.4.1 traz o 2.2.10 por padrão e as libs de UI (Vico/Haze) usam stdlib 2.4.x.
+kotlin = "2.4.21"
+agp = "9.4.1"
+coroutines = "1.11.0"
 junitPlatform = "1.11.4"
-androidxCore = "1.15.0"
-composeBom = "2025.03.01"
-activityCompose = "1.10.1"
-lifecycle = "2.8.7"
+androidxCore = "1.19.1"
+composeBom = "2026.09.00"
+activityCompose = "1.13.0"
+lifecycle = "2.11.0"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -29,8 +32,9 @@ compose-material-icons = { module = "androidx.compose.material:material-icons-ex
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitPlatform" }
 
 [plugins]
+# Módulos Android não aplicam mais o plugin `kotlin-android`: desde o AGP 9 o
+# Kotlin é embutido. O `kotlin-jvm` segue para o núcleo puro (Kotlin/JVM).
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
 android-application = { id = "com.android.application", version.ref = "agp" }

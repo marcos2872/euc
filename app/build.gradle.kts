@@ -1,17 +1,18 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "world.euc.app"
-    compileSdk = 35
+    // Compose 1.12 exige compilar contra a API 37 (android-37.2).
+    compileSdk = 37
+    compileSdkMinor = 2
 
     defaultConfig {
         applicationId = "world.euc.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
     }
@@ -38,12 +39,6 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-
 dependencies {
     implementation(project(":core:protocol"))
     implementation(project(":core:ble"))
@@ -61,7 +56,7 @@ dependencies {
     implementation(libs.compose.material.icons)
     debugImplementation(libs.compose.ui.tooling)
 
-    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit5"))
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

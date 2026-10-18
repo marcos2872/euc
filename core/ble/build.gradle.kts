@@ -1,11 +1,11 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "world.euc.ble"
-    compileSdk = 35
+    compileSdk = 37
+    compileSdkMinor = 2
 
     defaultConfig {
         minSdk = 26
@@ -26,18 +26,12 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
-
 dependencies {
     api(project(":core:protocol"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.androidx.core.ktx)
 
-    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit5"))
     testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
