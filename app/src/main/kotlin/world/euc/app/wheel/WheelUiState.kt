@@ -1,5 +1,7 @@
 package world.euc.app.wheel
 
+import world.euc.protocol.alarm.AlarmConfig
+import world.euc.protocol.alarm.AlarmEvent
 import world.euc.protocol.inmotion.FirmwareVersions
 import world.euc.protocol.inmotion.InmotionModelInfo
 import world.euc.protocol.model.WheelSettings
@@ -18,6 +20,10 @@ data class WheelUiState(
     val local: LocalSettings = LocalSettings(),
     /** Relógio da última leitura recebida (0 = nenhuma). */
     val lastTelemetryAtMillis: Long = 0L,
+    /** Configuração dos alarmes (persistida no aparelho). */
+    val alarmConfig: AlarmConfig = AlarmConfig(),
+    /** Alarme ativo no momento (para o aviso na tela). */
+    val activeAlarm: AlarmEvent? = null,
 )
 
 /**

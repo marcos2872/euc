@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import world.euc.app.ui.connect.ConnectScreen
+import world.euc.app.ui.alarms.AlarmsScreen
 import world.euc.app.ui.dashboard.DashboardScreen
 import world.euc.app.ui.settings.SettingsScreen
 import world.euc.app.ui.theme.EucTheme
@@ -38,13 +39,21 @@ class MainActivity : ComponentActivity() {
 private fun EucApp(manager: WheelConnectionManager) {
     val state by manager.state.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
+    var showAlarms by remember { mutableStateOf(false) }
 
     when {
         state.connection !is ConnectionState.Connected -> {
             showSettings = false
+            showAlarms = false
             ConnectScreen(manager, state)
         }
+        showAlarms -> AlarmsScreen(manager, state, onBack = { showAlarms = false })
         showSettings -> SettingsScreen(manager, state, onBack = { showSettings = false })
-        else -> DashboardScreen(manager, state, onOpenSettings = { showSettings = true })
+        else -> DashboardScreen(
+            manager = manager,
+            state = state,
+            onOpenSettings = { showSettings = true },
+            onOpenAlarms = { showAlarms = true },
+        )
     }
 }

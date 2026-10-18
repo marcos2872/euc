@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
@@ -37,6 +38,7 @@ import world.euc.app.wheel.WheelConnectionManager
 import world.euc.app.wheel.WheelUiState
 import world.euc.protocol.model.WheelTelemetry
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * Painel principal: telemetria ao vivo da roda e ações rápidas.
@@ -47,6 +49,7 @@ fun DashboardScreen(
     manager: WheelConnectionManager,
     state: WheelUiState,
     onOpenSettings: () -> Unit,
+    onOpenAlarms: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
 
@@ -71,6 +74,9 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onOpenAlarms) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Alarmes")
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Configurações da roda")
                     }
@@ -89,6 +95,9 @@ fun DashboardScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            state.activeAlarm?.let { alarm ->
+                AlarmBanner(alarm.type.name, alarm.value)
+            }
             SpeedCard(state.telemetry)
             BatteryCard(state.telemetry)
             StatsCard(state.telemetry)
@@ -101,6 +110,32 @@ fun DashboardScreen(
             Spacer(Modifier.height(8.dp))
         }
     }
+}
+
+@Composable
+private fun AlarmBanner(typeName: String, value: Double?) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            "⚠ ${alarmLabel(typeName)}${value?.let { " (${it.roundToInt()})" } ?: ""}",
+            modifier = Modifier.padding(12.dp),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+private fun alarmLabel(typeName: String): String = when (typeName) {
+    "SPEED_1", "SPEED_2", "SPEED_3" -> "Alarme de velocidade"
+    "SPEED_PRE_1", "SPEED_PRE_2" -> "Aproximando do alarme"
+    "SPEED_LIMIT" -> "Limite da roda"
+    "CURRENT" -> "Corrente alta"
+    "TEMPERATURE" -> "Temperatura alta"
+    "OVERVOLTAGE" -> "Tensão alta"
+    "UNDERVOLTAGE" -> "Tensão baixa"
+    "BATTERY" -> "Bateria baixa"
+    "SAFETY_MARGIN" -> "Margem de segurança baixa"
+    "CONNECTION_LOST" -> "Conexão perdida"
+    else -> typeName
 }
 
 @Composable

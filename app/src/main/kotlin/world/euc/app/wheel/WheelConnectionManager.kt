@@ -9,17 +9,24 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import world.euc.ble.AndroidWheelLink
 import world.euc.ble.BleWheelConnector
 import world.euc.ble.DiscoveredWheel
+import world.euc.app.alarm.AlarmConfigStore
+import world.euc.app.alarm.AlarmNotifier
+import world.euc.protocol.alarm.AlarmConfig
+import world.euc.protocol.alarm.AlarmEngine
 import world.euc.protocol.discovery.WheelProtocol
 import world.euc.protocol.inmotion.InmotionCommand
 import world.euc.protocol.inmotion.InmotionV2Commands
 import world.euc.protocol.inmotion.InmotionV2Session
 import world.euc.protocol.inmotion.SessionEvent
 import world.euc.protocol.model.WheelSettings
+import world.euc.protocol.model.WheelTelemetry
 
 /**
  * Orquestra a conexão com a roda: escaneamento, sessão de protocolo, comandos
@@ -30,14 +37,19 @@ class WheelConnectionManager(context: Context) {
 
     private val connector = BleWheelConnector(context.applicationContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val alarmConfigStore = AlarmConfigStore(context.applicationContext)
+    private val alarmEngine = AlarmEngine()
+    private val alarmNotifier = AlarmNotifier(context.applicationContext)
+    private var alarmConfig = alarmConfigStore.load()
 
-    private val _state = MutableStateFlow(WheelUiState())
+    private val _state = MutableStateFlow(WheelUiState(alarmConfig = alarmConfig))
     val state: StateFlow<WheelUiState> = _state.asStateFlow()
 
     private var link: AndroidWheelLink? = null
     private var session: InmotionV2Session? = null
     private var sessionJob: Job? = null
     private var eventsJob: Job? = null
+    private var connectionWatchJob: Job? = null
 
     /** Escaneia rodas próximas, emitindo cada descoberta. */
     fun scan(timeoutMillis: Long = DEFAULT_SCAN_MILLIS): Flow<DiscoveredWheel> =
@@ -59,6 +71,7 @@ class WheelConnectionManager(context: Context) {
             session = newSession
             eventsJob = scope.launch { newSession.events.collect(::onSessionEvent) }
             sessionJob = newSession.start(scope)
+            startConnectionWatch()
         }.onSuccess {
             _state.update { it.copy(connection = ConnectionState.Connected(wheel.name)) }
         }.onFailure { error ->
@@ -73,12 +86,14 @@ class WheelConnectionManager(context: Context) {
     fun disconnect() {
         eventsJob?.cancel()
         sessionJob?.cancel()
+        connectionWatchJob?.cancel()
         link?.close()
         eventsJob = null
         sessionJob = null
+        connectionWatchJob = null
         session = null
         link = null
-        _state.value = WheelUiState()
+        _state.value = WheelUiState(alarmConfig = alarmConfig)
     }
 
     // ------------------------------------------------------------ ações rápidas
@@ -231,8 +246,11 @@ class WheelConnectionManager(context: Context) {
 
     private fun onSessionEvent(event: SessionEvent) {
         when (event) {
-            is SessionEvent.TelemetryReceived -> _state.update {
-                it.copy(telemetry = event.telemetry, lastTelemetryAtMillis = System.currentTimeMillis())
+            is SessionEvent.TelemetryReceived -> {
+                _state.update {
+                    it.copy(telemetry = event.telemetry, lastTelemetryAtMillis = System.currentTimeMillis())
+                }
+                evaluateAlarms(event.telemetry)
             }
             is SessionEvent.ModelIdentified -> _state.update { it.copy(model = event.model) }
             is SessionEvent.SerialNumberReceived -> _state.update { it.copy(serialNumber = event.serialNumber) }
@@ -256,7 +274,59 @@ class WheelConnectionManager(context: Context) {
         extendedLateralTiltLimit = reported.extendedLateralTiltLimit ?: extendedLateralTiltLimit,
     )
 
+    // ------------------------------------------------------------ alarmes
+
+    /** Atualiza e persiste a configuração de alarmes. */
+    fun updateAlarmConfig(config: AlarmConfig) {
+        alarmConfig = config
+        alarmConfigStore.save(config)
+        _state.update { it.copy(alarmConfig = config) }
+    }
+
+    private fun evaluateAlarms(telemetry: WheelTelemetry) {
+        val events = alarmEngine.evaluate(telemetry, alarmConfig, System.currentTimeMillis())
+        events.forEach { event ->
+            alarmNotifier.notify(event, alarmConfig)
+            _state.update { it.copy(activeAlarm = event) }
+        }
+        if (events.isNotEmpty()) scheduleAlarmClear()
+    }
+
+    private fun scheduleAlarmClear() {
+        scope.launch {
+            delay(ALARM_BANNER_MILLIS)
+            _state.update { it.copy(activeAlarm = null) }
+        }
+    }
+
+    /** Vigia a perda de telemetria e avisa uma vez por ocorrência. */
+    private fun startConnectionWatch() {
+        connectionWatchJob = scope.launch {
+            while (isActive) {
+                delay(1_000)
+                val current = _state.value
+                val event = alarmEngine.evaluateConnection(
+                    lastTelemetryAtMillis = current.lastTelemetryAtMillis,
+                    config = alarmConfig,
+                    nowMillis = System.currentTimeMillis(),
+                )
+                if (event != null) {
+                    alarmNotifier.notify(event, alarmConfig)
+                    _state.update { it.copy(activeAlarm = event) }
+                    scheduleAlarmClear()
+                }
+            }
+        }
+    }
+
+    /** Libera o motor de voz do aparelho. */
+    fun release() {
+        disconnect()
+        alarmNotifier.shutdown()
+    }
+
     private companion object {
         const val DEFAULT_SCAN_MILLIS = 15_000L
+        const val ALARM_BANNER_MILLIS = 6_000L
     }
 }
