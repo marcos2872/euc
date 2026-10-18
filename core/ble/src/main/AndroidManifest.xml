@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Módulo de transporte BLE: sem componentes declarados.
+     As permissões de Bluetooth são responsabilidade do app consumidor. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
