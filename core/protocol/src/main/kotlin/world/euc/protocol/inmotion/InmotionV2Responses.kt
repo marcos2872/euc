@@ -75,6 +75,34 @@ object InmotionV2Responses {
         )
     }
 
+    /**
+     * Extrai o blob de 16 bytes da resposta ao pedido de chave.
+     *
+     * Formato observado na referência comunitária: prefixo `02 80 02` seguido
+     * da chave. A chave é lida como os 16 últimos bytes do payload, o que
+     * tolera variações de prefixo entre firmwares.
+     */
+    fun parseAuthKey(frame: InmotionFrame): ByteArray? {
+        val payload = frame.payload
+        if (payload.size < AUTH_KEY_SIZE + 3) return null
+        if (payload[0].toInt() and 0xFF != 0x02) return null
+        if (payload[1].toInt() and 0xFF != 0x80) return null
+        if (payload[2].toInt() and 0xFF != 0x02) return null
+        return payload.copyOfRange(payload.size - AUTH_KEY_SIZE, payload.size)
+    }
+
+    /** Confirmação de autenticação bem-sucedida (`02 80 82 01`). */
+    fun isAuthSuccess(frame: InmotionFrame): Boolean {
+        val payload = frame.payload
+        return payload.size >= 4 &&
+            payload[0].toInt() and 0xFF == 0x02 &&
+            payload[1].toInt() and 0xFF == 0x80 &&
+            payload[2].toInt() and 0xFF == 0x82 &&
+            payload[3].toInt() and 0xFF == 0x01
+    }
+
+    private const val AUTH_KEY_SIZE = 16
+
     private fun versionAt(payload: ByteArray, offset: Int): String? {
         if (offset + 3 >= payload.size) return null
         val major = payload[offset + 3].toInt() and 0xFF

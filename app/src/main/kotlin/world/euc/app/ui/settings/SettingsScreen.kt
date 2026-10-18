@@ -191,6 +191,21 @@ fun SettingsScreen(
             }
 
             SectionCard("Segurança") {
+                state.authenticated?.let { authenticated ->
+                    Text(
+                        if (authenticated) {
+                            "Sessão autenticada com a roda — comandos sensíveis liberados."
+                        } else {
+                            "A roda não confirmou a autenticação: bloqueio e comandos sensíveis podem ser ignorados."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (authenticated) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        },
+                    )
+                }
                 SwitchRow(
                     label = "Bloqueio da roda",
                     checked = local.locked,

@@ -21,10 +21,11 @@ import java.util.concurrent.atomic.AtomicReference
  * Sessão de comunicação com uma roda Inmotion V2 (família V11+).
  *
  * Responsabilidades:
- * 1. Rodar a sequência de inicialização ao conectar (modelo → serial → firmware → settings).
- * 2. Consultar telemetria periodicamente (comando `0x04`).
- * 3. Enviar comandos de controle em fila, um por vez, com timeout e retry.
- * 4. Remontar notificações fragmentadas e publicar eventos de domínio.
+ * 1. Autenticar a sessão (handshake `0x13`) — necessário para lock em V12+.
+ * 2. Rodar a inicialização ao conectar (modelo → serial → firmware → settings).
+ * 3. Consultar telemetria periodicamente (comando `0x04`).
+ * 4. Enviar comandos de controle em fila, um por vez, com timeout e retry.
+ * 5. Remontar notificações fragmentadas e publicar eventos de domínio.
  *
  * O transporte vem da porta [WheelLink]; esta classe não conhece Android nem
  * Bluetooth, o que a torna testável com tempo virtual.
@@ -39,15 +40,17 @@ class InmotionV2Session(
     private val settingsParser = InmotionV2SettingsParser()
     private val queue = Channel<QueuedCommand>(config.queueCapacity)
     private val responseWaiter = AtomicReference<ResponseWaiter?>(null)
+    private val authKeyChannel = AtomicReference<Channel<ByteArray>?>(null)
+    private val authAckChannel = AtomicReference<Channel<Boolean>?>(null)
 
     private val _events = MutableSharedFlow<SessionEvent>(extraBufferCapacity = 64)
 
-    /** Eventos de domínio: telemetria, identificação e falhas de comando. */
+    /** Eventos de domínio: telemetria, identificação, autenticação e falhas. */
     val events: SharedFlow<SessionEvent> = _events.asSharedFlow()
 
     /**
      * Inicia a sessão: dispara os loops de recepção, de comandos e de polling,
-     * e enfileira a sequência de inicialização. O job devolvido representa a
+     * e enfileira autenticação + inicialização. O job devolvido representa a
      * sessão inteira — cancelá-lo encerra tudo.
      */
     fun start(scope: CoroutineScope): Job = scope.launch {
@@ -62,15 +65,16 @@ class InmotionV2Session(
 
     /** Enfileira um comando de controle (sem resposta dedicada). */
     suspend fun send(command: InmotionCommand) {
-        queue.send(QueuedCommand(command, expectsResponse = false))
+        queue.send(QueuedCommand.Control(command))
     }
 
     /** Enfileira uma consulta que aguarda resposta, com retry automático. */
     suspend fun query(command: InmotionCommand) {
-        queue.send(QueuedCommand(command, expectsResponse = true))
+        queue.send(QueuedCommand.Query(command))
     }
 
     private suspend fun enqueueInitialization() {
+        queue.send(QueuedCommand.Authenticate)
         query(InmotionV2Commands.readModel())
         query(InmotionV2Commands.readSerialNumber())
         query(InmotionV2Commands.readFirmwareVersions())
@@ -84,8 +88,21 @@ class InmotionV2Session(
     }
 
     private fun handleFrame(frame: InmotionFrame) {
+        config.logger?.invoke("RX ${frame.toHex()}")
+        captureAuthKey(frame)
+        captureAuthAck(frame)
         signalWaiter(frame)
         publishEvents(frame)
+    }
+
+    private fun captureAuthKey(frame: InmotionFrame) {
+        val channel = authKeyChannel.get() ?: return
+        InmotionV2Responses.parseAuthKey(frame)?.let { key -> channel.trySend(key) }
+    }
+
+    private fun captureAuthAck(frame: InmotionFrame) {
+        val channel = authAckChannel.get() ?: return
+        if (InmotionV2Responses.isAuthSuccess(frame)) channel.trySend(true)
     }
 
     private fun signalWaiter(frame: InmotionFrame) {
@@ -115,20 +132,50 @@ class InmotionV2Session(
 
     private suspend fun commandLoop() {
         for (queued in queue) {
-            if (queued.expectsResponse) {
-                executeWithRetry(queued.command)
-            } else {
-                link.write(queued.command.toFrame())
-                delay(config.controlSettleMillis)
+            when (queued) {
+                is QueuedCommand.Control -> {
+                    writeFrame(queued.command)
+                    delay(config.controlSettleMillis)
+                }
+                is QueuedCommand.Query -> executeWithRetry(queued.command)
+                QueuedCommand.Authenticate -> performAuthentication()
             }
         }
+    }
+
+    /**
+     * Executa o handshake de autenticação: pede a chave, devolve o mesmo blob
+     * e aguarda a confirmação. A roda aceita comandos sensíveis (lock) apenas
+     * depois disso.
+     */
+    private suspend fun performAuthentication() {
+        val keyChannel = Channel<ByteArray>(1)
+        authKeyChannel.set(keyChannel)
+        writeFrame(InmotionV2Commands.requestAuthKey())
+
+        val key = withTimeoutOrNull(config.authTimeoutMillis) { keyChannel.receive() }
+        authKeyChannel.set(null)
+        if (key == null) {
+            config.logger?.invoke("auth: sem chave da roda (timeout)")
+            _events.tryEmit(SessionEvent.AuthenticationCompleted(success = false))
+            return
+        }
+
+        val ackChannel = Channel<Boolean>(1)
+        authAckChannel.set(ackChannel)
+        writeFrame(InmotionV2Commands.verifyAuth(key))
+
+        val confirmed = withTimeoutOrNull(config.authTimeoutMillis) { ackChannel.receive() } == true
+        authAckChannel.set(null)
+        config.logger?.invoke("auth: ${if (confirmed) "confirmada" else "sem confirmação da roda"}")
+        _events.tryEmit(SessionEvent.AuthenticationCompleted(success = confirmed))
     }
 
     private suspend fun executeWithRetry(command: InmotionCommand) {
         repeat(config.maxAttempts) { attempt ->
             val signal = Channel<Unit>(1)
             responseWaiter.set(ResponseWaiter(command, signal))
-            link.write(command.toFrame())
+            writeFrame(command)
 
             val acknowledged = withTimeoutOrNull(config.queryTimeoutMillis) { signal.receive() } != null
             responseWaiter.set(null)
@@ -140,31 +187,46 @@ class InmotionV2Session(
         }
     }
 
+    private suspend fun writeFrame(command: InmotionCommand) {
+        config.logger?.invoke("TX ${command.toHex()}")
+        link.write(command.toFrame())
+    }
+
     private suspend fun pollLoop() {
         while (currentCoroutineContext().isActive) {
             delay(config.pollIntervalMillis)
-            queue.trySend(QueuedCommand(InmotionV2Commands.readValues(), expectsResponse = true))
+            queue.trySend(QueuedCommand.Query(InmotionV2Commands.readValues()))
         }
     }
 
-    private class QueuedCommand(
-        val command: InmotionCommand,
-        val expectsResponse: Boolean,
-    )
+    private sealed interface QueuedCommand {
+        data class Control(val command: InmotionCommand) : QueuedCommand
+        data class Query(val command: InmotionCommand) : QueuedCommand
+        data object Authenticate : QueuedCommand
+    }
 
     private class ResponseWaiter(
         val command: InmotionCommand,
         val signal: Channel<Unit>,
     )
+
+    private fun InmotionFrame.toHex(): String =
+        payload.joinToString(" ") { "%02X".format(it) }.let { "tipo=${"%02X".format(typeCode)} $it" }
+
+    private fun InmotionCommand.toHex(): String =
+        payload.joinToString(" ") { "%02X".format(it) }.let { "tipo=${"%02X".format(frameType.code)} $it" }
 }
 
-/** Ajustes de tempo e capacidade da sessão. */
+/** Ajustes de tempo, capacidade e diagnóstico da sessão. */
 data class SessionConfig(
     val queryTimeoutMillis: Long = 1_000,
     val controlSettleMillis: Long = 100,
+    val authTimeoutMillis: Long = 2_000,
     val maxAttempts: Int = 3,
     val pollIntervalMillis: Long = 500,
     val queueCapacity: Int = 32,
+    /** Recebe linhas de diagnóstico (hex de TX/RX e handshake). */
+    val logger: ((String) -> Unit)? = null,
 )
 
 /** Eventos publicados pela sessão. */
@@ -184,6 +246,9 @@ sealed interface SessionEvent {
 
     /** Configurações da roda recebidas (apenas os campos reportados). */
     data class SettingsReceived(val settings: WheelSettings) : SessionEvent
+
+    /** Handshake de autenticação concluído (ou não). */
+    data class AuthenticationCompleted(val success: Boolean) : SessionEvent
 
     /** Consulta esgotou as tentativas sem resposta. */
     data class CommandTimedOut(val command: InmotionCommand) : SessionEvent

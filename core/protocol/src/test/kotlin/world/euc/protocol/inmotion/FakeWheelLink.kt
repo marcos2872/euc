@@ -16,8 +16,36 @@ class FakeWheelLink : WheelLink {
 
     override val incoming: Flow<ByteArray> = incomingFlow.asSharedFlow()
 
+    /** Quando true, responde ao handshake de autenticação automaticamente. */
+    var answerAuthentication: Boolean = false
+
+    /** Blob devolvido na resposta de chave (16 bytes). */
+    val authKey: ByteArray = ByteArray(16) { (it + 1).toByte() }
+
     override suspend fun write(bytes: ByteArray) {
         writtenFrames += bytes.copyOf()
+        if (!answerAuthentication) return
+        val command = InmotionV2Framing.decode(bytes) ?: return
+        when {
+            command.payload.contentEquals(byteArrayOf(0x02, 0x00, 0x00, 0x02)) -> {
+                // resposta de requestAuthKey: prefixo 02 80 02 + 16 bytes
+                incomingFlow.tryEmit(
+                    InmotionV2Framing.encode(
+                        InmotionFrameType.AUTH,
+                        byteArrayOf(0x02, 0x80.toByte(), 0x02) + authKey,
+                    ),
+                )
+            }
+            command.payload.size == 20 && command.payload[3] == 0x82.toByte() -> {
+                // confirmação de verifyAuth
+                incomingFlow.tryEmit(
+                    InmotionV2Framing.encode(
+                        InmotionFrameType.AUTH,
+                        byteArrayOf(0x02, 0x80.toByte(), 0x82.toByte(), 0x01),
+                    ),
+                )
+            }
+        }
     }
 
     /** Injeta bytes recebidos (como uma notificação BLE). */
@@ -35,6 +63,13 @@ class FakeWheelLink : WheelLink {
 
     /** Total de quadros escritos. */
     fun writeTotal(): Int = writtenFrames.size
+
+    /** Payloads ignorando o handshake de autenticação (para asserções de protocolo). */
+    fun writtenProtocolPayloads(): List<ByteArray> =
+        writtenFrames
+            .mapNotNull { InmotionV2Framing.decode(it) }
+            .filter { it.type != InmotionFrameType.AUTH }
+            .map { it.payload }
 }
 
 /** Fábrica de quadros de resposta para os testes. */

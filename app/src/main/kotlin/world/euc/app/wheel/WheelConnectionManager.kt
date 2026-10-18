@@ -1,6 +1,7 @@
 package world.euc.app.wheel
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,6 +26,7 @@ import world.euc.protocol.inmotion.InmotionCommand
 import world.euc.protocol.inmotion.InmotionV2Commands
 import world.euc.protocol.inmotion.InmotionModel
 import world.euc.protocol.inmotion.InmotionV2Session
+import world.euc.protocol.inmotion.SessionConfig
 import world.euc.protocol.inmotion.SessionEvent
 import world.euc.protocol.model.WheelSettings
 import world.euc.protocol.model.WheelTelemetry
@@ -68,7 +70,10 @@ class WheelConnectionManager(context: Context) {
             val established = connector.connect(wheel.device, protocol)
             link = established
 
-            val newSession = InmotionV2Session(established)
+            val newSession = InmotionV2Session(
+                link = established,
+                config = SessionConfig(logger = { line -> Log.d(LOG_TAG, line) }),
+            )
             session = newSession
             eventsJob = scope.launch { newSession.events.collect(::onSessionEvent) }
             sessionJob = newSession.start(scope)
@@ -269,6 +274,7 @@ class WheelConnectionManager(context: Context) {
             is SessionEvent.SettingsReceived -> _state.update {
                 it.copy(settings = it.settings.mergedWith(event.settings))
             }
+            is SessionEvent.AuthenticationCompleted -> _state.update { it.copy(authenticated = event.success) }
             is SessionEvent.CommandTimedOut -> Unit // observabilidade futura (log de depuração)
         }
     }
@@ -337,6 +343,7 @@ class WheelConnectionManager(context: Context) {
     }
 
     private companion object {
+        const val LOG_TAG = "EucSession"
         const val DEFAULT_SCAN_MILLIS = 15_000L
         const val ALARM_BANNER_MILLIS = 6_000L
     }

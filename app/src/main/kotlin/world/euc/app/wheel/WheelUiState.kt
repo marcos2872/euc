@@ -24,6 +24,8 @@ data class WheelUiState(
     val alarmConfig: AlarmConfig = AlarmConfig(),
     /** Alarme ativo no momento (para o aviso na tela). */
     val activeAlarm: AlarmEvent? = null,
+    /** Resultado do handshake de autenticação (null = em andamento). */
+    val authenticated: Boolean? = null,
 )
 
 /**

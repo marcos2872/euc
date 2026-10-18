@@ -42,6 +42,8 @@ object InmotionV2Commands {
     private const val CONTROL = 0x60
     private const val ROUTING_0 = 0x02
     private const val ROUTING_1 = 0x21
+    private const val ROUTING_AUTH_0 = 0x02
+    private const val ROUTING_AUTH_1 = 0x00
 
     // ---------------------------------------------------------------- consultas
 
@@ -240,6 +242,33 @@ object InmotionV2Commands {
      */
     fun calibration(yaw: Boolean): InmotionCommand =
         if (yaw) control(0x52, 0x01, 0x00, 0x01) else control(0x52, 0x01, 0x01, 0x00)
+
+    // ---------------------------------------------------------------- autenticação
+
+    /**
+     * Handshake de autenticação (obrigatório para `SET_LOCK` na família
+     * V12+ e para todo o controle no P6).
+     *
+     * Primeiro passo: pede a chave. A roda responde com um blob de 16 bytes
+     * que deve ser devolvido em [verifyAuth].
+     */
+    fun requestAuthKey(): InmotionCommand =
+        command(InmotionFrameType.AUTH, ROUTING_AUTH_0, ROUTING_AUTH_1, 0x00, 0x02)
+
+    /** Segundo passo: devolve o blob recebido para concluir a autenticação. */
+    fun verifyAuth(key: ByteArray): InmotionCommand {
+        require(key.size == AUTH_KEY_SIZE) { "chave de autenticação deve ter $AUTH_KEY_SIZE bytes" }
+        val payload = ByteArray(4 + key.size)
+        payload[0] = ROUTING_AUTH_0.toByte()
+        payload[1] = ROUTING_AUTH_1.toByte()
+        payload[2] = 0x00
+        payload[3] = 0x82.toByte()
+        key.copyInto(payload, destinationOffset = 4)
+        return InmotionCommand(InmotionFrameType.AUTH, payload)
+    }
+
+    /** Tamanho do blob de autenticação trocado com a roda. */
+    const val AUTH_KEY_SIZE = 16
 
     // ---------------------------------------------------------------- internos
 

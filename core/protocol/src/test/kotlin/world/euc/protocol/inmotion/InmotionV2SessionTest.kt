@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -19,28 +20,28 @@ class InmotionV2SessionTest {
 
     @Test
     fun `inicialização consulta modelo, serial, firmware e settings na ordem`() = runTest {
-        val link = FakeWheelLink()
+        val link = FakeWheelLink().apply { answerAuthentication = true }
         val session = InmotionV2Session(link, config())
         session.start(backgroundScope)
-        runCurrent()
+        repeat(4) { runCurrent() } // handshake + primeira consulta
 
-        assertEquals(listOf(modelPayload.toList()), link.writtenPayloads().map { it.toList() })
+        assertEquals(listOf(modelPayload.toList()), link.writtenProtocolPayloads().map { it.toList() })
 
         link.emit(TestFrames.carType(modelByte = 6, variant = 2))
         runCurrent()
-        assertEquals(serialPayload.toList(), link.writtenPayloads()[1].toList())
+        assertEquals(serialPayload.toList(), link.writtenProtocolPayloads()[1].toList())
 
         link.emit(TestFrames.serial("V11Y0000000000000001"))
         runCurrent()
-        assertEquals(firmwarePayload.toList(), link.writtenPayloads()[2].toList())
+        assertEquals(firmwarePayload.toList(), link.writtenProtocolPayloads()[2].toList())
 
         link.emit(TestFrames.firmware(1, 4, 0))
         runCurrent()
-        assertEquals(settingsPayload.toList(), link.writtenPayloads()[3].toList())
+        assertEquals(settingsPayload.toList(), link.writtenProtocolPayloads()[3].toList())
 
         link.emit(TestFrames.settings())
         runCurrent()
-        assertEquals(4, link.writtenPayloads().size)
+        assertEquals(4, link.writtenProtocolPayloads().size)
     }
 
     @Test
@@ -74,13 +75,13 @@ class InmotionV2SessionTest {
 
     @Test
     fun `consulta sem resposta é reenviada até o limite e emite timeout`() = runTest {
-        val link = FakeWheelLink()
+        val link = FakeWheelLink().apply { answerAuthentication = true }
         val session = InmotionV2Session(link, config())
         val events = mutableListOf<SessionEvent>()
         backgroundScope.launch { session.events.collect { events += it } }
         runCurrent()
         session.start(backgroundScope)
-        runCurrent()
+        repeat(4) { runCurrent() }
 
         assertEquals(1, link.writeCount(modelPayload))
 
@@ -97,10 +98,10 @@ class InmotionV2SessionTest {
 
     @Test
     fun `após a inicialização faz polling de telemetria periodicamente`() = runTest {
-        val link = FakeWheelLink()
+        val link = FakeWheelLink().apply { answerAuthentication = true }
         val session = InmotionV2Session(link, config(pollIntervalMillis = 1_000))
         session.start(backgroundScope)
-        runCurrent()
+        repeat(4) { runCurrent() }
 
         answerInitialization(link)
 
@@ -114,10 +115,10 @@ class InmotionV2SessionTest {
 
     @Test
     fun `comando de controle é enviado em fila, sem esperar resposta`() = runTest {
-        val link = FakeWheelLink()
+        val link = FakeWheelLink().apply { answerAuthentication = true }
         val session = InmotionV2Session(link, config())
         session.start(backgroundScope)
-        runCurrent()
+        repeat(4) { runCurrent() }
 
         answerInitialization(link)
 
@@ -141,6 +142,46 @@ class InmotionV2SessionTest {
         advanceTimeBy(10_000); runCurrent()
 
         assertEquals(writesAfterCancel, link.writeTotal())
+    }
+
+    @Test
+    fun `handshake de autenticação envia chave e confirmação`() = runTest {
+        val link = FakeWheelLink()
+        link.answerAuthentication = true
+        val session = InmotionV2Session(link, config())
+        val events = mutableListOf<SessionEvent>()
+        backgroundScope.launch { session.events.collect { events += it } }
+        runCurrent()
+        session.start(backgroundScope)
+        runCurrent()
+
+        // Primeiro quadro: pedido de chave (vetor do app oficial).
+        val request = link.writtenPayloads().first()
+        assertContentEquals(byteArrayOf(0x02, 0x00, 0x00, 0x02), request)
+
+        // Segundo quadro: verificação devolvendo o blob recebido.
+        val verify = link.writtenPayloads()[1]
+        assertEquals(20, verify.size)
+        assertContentEquals(link.authKey, verify.copyOfRange(4, 20))
+
+        assertTrue(events.any { it is SessionEvent.AuthenticationCompleted && it.success })
+    }
+
+    @Test
+    fun `sem resposta de chave a sessão segue sem autenticar`() = runTest {
+        val link = FakeWheelLink()
+        val session = InmotionV2Session(link, config())
+        val events = mutableListOf<SessionEvent>()
+        backgroundScope.launch { session.events.collect { events += it } }
+        runCurrent()
+        session.start(backgroundScope)
+        runCurrent()
+
+        advanceTimeBy(2_001); runCurrent()
+
+        assertTrue(events.any { it is SessionEvent.AuthenticationCompleted && !it.success })
+        // A inicialização continua mesmo sem autenticação.
+        assertTrue(link.writeCount(modelPayload) >= 1)
     }
 
     private suspend fun TestScope.answerInitialization(link: FakeWheelLink) {
