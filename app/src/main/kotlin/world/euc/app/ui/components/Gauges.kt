@@ -33,6 +33,9 @@ import kotlin.math.sin
 private const val GAUGE_START_ANGLE = 150f
 private const val GAUGE_SWEEP_ANGLE = 240f
 
+/** Quanto da altura do diâmetro o arco ocupa (240° a partir de 150°). */
+private const val ARC_VERTICAL_FRACTION = 0.75f
+
 /**
  * Velocímetro circular: arco em gradiente ciano → lima (o arco do logo), marcas
  * a cada 5 km/h e a marca do limite (tiltback) da roda.
@@ -62,9 +65,11 @@ fun SpeedGauge(
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = 16.dp.toPx()
-            // O arco é sempre circular: usa o menor lado e centraliza, então o
-            // medidor não "achata" quando o cartão é mais largo que alto.
-            val diameter = min(size.width, size.height) - stroke - 16.dp.toPx()
+            // O arco é sempre circular e ocupa ~75% da altura do diâmetro (240°
+            // de abertura), então o diâmetro pode ser limitado pela largura —
+            // sem sobrar vão entre o medidor e o que vem abaixo.
+            val margin = stroke + 16.dp.toPx()
+            val diameter = min(size.width - margin, (size.height - margin) / ARC_VERTICAL_FRACTION)
             val inset = Offset(
                 (size.width - diameter) / 2f,
                 (size.height - diameter) / 2f,
