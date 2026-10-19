@@ -37,7 +37,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import world.euc.app.wheel.WheelConnectionManager
 import world.euc.app.wheel.WheelUiState
-import world.euc.app.ui.components.ChoiceRow
+import world.euc.app.ui.components.SegmentedControl
+import world.euc.app.ui.designsystem.EucSpacing
 import world.euc.app.ui.components.SectionCard
 import world.euc.app.ui.components.SliderRow
 import world.euc.app.ui.components.SwitchRow
@@ -101,12 +102,15 @@ fun SettingsScreen(
                     )
                 }
                 if (WheelSettingId.RIDING_MODE in capabilities) {
-                    ChoiceRow(
-                        label = "Modo de condução",
-                        options = listOf(0 to "Comfort", 1 to "Sport"),
-                        selected = settings.ridingMode ?: 1,
-                        onSelect = { scope.launch { manager.setRidingMode(it) } },
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(EucSpacing.sm)) {
+                        Text("Modo de condução", style = MaterialTheme.typography.bodyLarge)
+                        SegmentedControl(
+                            options = listOf(0 to "Comfort", 1 to "Sport"),
+                            selected = settings.ridingMode ?: 1,
+                            onSelect = { scope.launch { manager.setRidingMode(it) } },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
                 if (WheelSettingId.PEDAL_TILT in capabilities) {
                     SliderRow(

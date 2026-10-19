@@ -96,3 +96,19 @@ Pendências conhecidas:
 3. Fase 5 conforme o uso: webserver local, TPMS/radar, controle de carregador, sync com nuvem.
 3. Implementar `:core:ble` (scan/connect/GATT).
 4. Primeira tela: conexão + telemetria ao vivo.
+
+## 8. Modernização da interface (out/2026) — concluída
+
+| Fase | Entrega | Commit |
+|---|---|---|
+| 0 | Toolchain: Gradle 9.8.1, AGP 9.4.1 (Kotlin embutido), KGP 2.4.21, compileSdk 37 + minor 2, Compose BOM 2026.09.00 (Compose 1.12.1 + Material 3 1.4.0) | `658504f` |
+| 1 | Design system (`ui/designsystem`): paleta do logo (fundo #070B10, ciano #35E0F5, lima #A8E635), Inter variável com números tabulares, formas 10–28dp + pílula, espaçamento, movimento; temas escuro (padrão), AMOLED e claro | `c756f2e` |
+| 2 | Casca: Navigation 3 (rotas serializáveis), barra inferior flutuante em pílula com desfoque (Haze 2.0.1), edge-to-edge, transições | `62f0b27` |
+| 3 | Painel com velocímetro em arco (gradiente ciano→lima, marca do tiltback), anéis de bateria/carga/temperatura, ações em pílula com retorno tátil; tela de conexão com radar animado e barras de sinal; controle segmentado nos ajustes; histórico de passeios redesenhado | `ef3a07a`, `f0e0f4e` |
+| 5 | Ícone do app a partir do `branding/logo.jpeg` (flood fill das bordas → camadas foreground/background/monochrome em mdpi…xxxhdpi), splash com o logo, marca na tela Sobre | `a5de9e0` |
+
+Bugs corrigidos no caminho: escrita BLE concorrente derrubava o app (agora serializada por mutex, com retentativa) e faltava a permissão `VIBRATE` do alarme.
+
+Verificação sem toques (o MIUI bloqueia `input tap`): modo debug de navegação
+`am start -S -n world.euc.app/.MainActivity --es screen <tela>` e telemetria
+sintética com `--ez demo true` (só em debug).

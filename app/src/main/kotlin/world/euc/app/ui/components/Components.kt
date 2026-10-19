@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -192,6 +193,51 @@ fun <T> ChoiceFlowRow(
                     selected = value == selected,
                     onClick = { onSelect(value) },
                     label = { Text(text) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Controle segmentado (estilo iOS) para escolher entre poucas opções — ocupa a
+ * largura toda e destaca o item ativo com a cor primária.
+ */
+@Composable
+fun <T> SegmentedControl(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(PillShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(EucSpacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(EucSpacing.xs),
+    ) {
+        options.forEach { (value, text) ->
+            val isSelected = value == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(PillShape)
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    )
+                    .clickable { onSelect(value) }
+                    .padding(vertical = EucSpacing.sm),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                 )
             }
         }

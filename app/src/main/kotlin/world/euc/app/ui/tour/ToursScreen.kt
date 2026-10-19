@@ -443,27 +443,38 @@ private fun TourRow(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = EucSpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(EucSpacing.sm),
     ) {
         if (selecting) {
             Checkbox(checked = selected, onCheckedChange = { onClick() })
         }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(tour.name, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                buildString {
-                    append(String.format(Locale.getDefault(), "%.2f km", tour.distanceKm))
-                    append(" · ")
-                    append(formatDuration(tour.durationMs))
-                    append(" · média ")
-                    append(String.format(Locale.getDefault(), "%.1f km/h", tour.avgSpeedKmh))
-                    append(" · máx ")
-                    append(String.format(Locale.getDefault(), "%.1f km/h", tour.maxSpeedKmh))
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(tour.name, style = MaterialTheme.typography.titleSmall)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(EucSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    String.format(Locale.getDefault(), "%.2f km", tour.distanceKm),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    formatDuration(tour.durationMs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    String.format(Locale.getDefault(), "máx %.0f km/h", tour.maxSpeedKmh),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             tour.wheelModel?.let { model ->
                 Text(
                     model,
@@ -473,8 +484,12 @@ private fun TourRow(
             }
         }
         if (!selecting) {
-            OutlinedButton(onClick = onClick) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "Abrir passeio")
+            IconButton(onClick = onClick) {
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = "Abrir passeio",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
