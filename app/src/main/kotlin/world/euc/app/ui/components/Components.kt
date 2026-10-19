@@ -97,6 +97,7 @@ fun SwitchRow(
     label: String,
     checked: Boolean,
     description: String? = null,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -105,7 +106,15 @@ fun SwitchRow(
         horizontalArrangement = Arrangement.spacedBy(EucSpacing.md),
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
             description?.let {
                 Text(
                     it,
@@ -114,11 +123,16 @@ fun SwitchRow(
                 )
             }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
-/** Slider que só envia o valor à roda quando o usuário solta. */
+/**
+ * Slider que só envia o valor à roda quando o usuário solta.
+ *
+ * Quando o ajuste depende de outro (ex.: aceleração dos modos separados só vale
+ * com o modo ligado), passe `enabled = false` para deixá-lo inativo e cinza.
+ */
 @Composable
 fun SliderRow(
     label: String,
@@ -126,17 +140,40 @@ fun SliderRow(
     valueRange: ClosedFloatingPointRange<Float>,
     unit: String,
     decimals: Int = 0,
+    description: String? = null,
+    enabled: Boolean = true,
     onCommit: (Float) -> Unit,
 ) {
     var local by remember(value) { mutableFloatStateOf(value) }
 
     Column {
         Row(modifier = Modifier.fillMaxWidth()) {
-            Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                description?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             Text(
                 formatValue(local, decimals) + unit,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
         Slider(
@@ -144,6 +181,7 @@ fun SliderRow(
             onValueChange = { local = it },
             onValueChangeFinished = { onCommit(local) },
             valueRange = valueRange,
+            enabled = enabled,
         )
     }
 }

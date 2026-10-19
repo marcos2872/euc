@@ -81,22 +81,35 @@ fun AlarmsScreen(
             verticalArrangement = Arrangement.spacedBy(EucSpacing.md),
         ) {
             SectionCard("Avisos") {
-                SwitchRow("Alarmes ativos", config.enabled) {
+                SwitchRow(
+                    label = "Alarmes ativos",
+                    checked = config.enabled,
+                    description = "Interruptor geral: desligado, nenhum alarme avisa.",
+                ) {
                     update(config.copy(enabled = it))
                 }
-                SwitchRow("Voz (TTS)", config.voiceEnabled) {
+                SwitchRow(
+                    label = "Voz (TTS)",
+                    checked = config.voiceEnabled,
+                    description = "Fala o aviso em voz alta pelo telefone.",
+                ) {
                     update(config.copy(voiceEnabled = it))
                 }
-                SwitchRow("Vibração", config.vibrationEnabled) {
+                SwitchRow(
+                    label = "Vibração",
+                    checked = config.vibrationEnabled,
+                    description = "Vibra o telefone junto com o aviso.",
+                ) {
                     update(config.copy(vibrationEnabled = it))
                 }
                 SwitchRow(
                     label = "Avisar se perder a conexão",
                     checked = config.isEnabled(AlarmType.CONNECTION_LOST),
-                    description = "Fala e vibra quando a telemetria para de chegar.",
+                    description = "Avisa quando a telemetria para de chegar (roda desligada ou fora de alcance).",
                 ) { enabled -> setEnabled(AlarmType.CONNECTION_LOST, enabled) }
                 SliderRow(
                     label = "Tempo sem dados",
+                    description = "Quanto tempo sem leitura dispara o aviso de conexão perdida.",
                     value = (config.connectionLostAfterMillis / 1000f),
                     valueRange = 3f..30f,
                     unit = " s",
@@ -108,6 +121,7 @@ fun AlarmsScreen(
                 LimitsHint("Teto do modelo: ${limits.maxSpeedKmh.format(0)} km/h")
                 AlarmLevel(
                     label = "Nível 1 (baixa prioridade)",
+                    description = "Primeiro aviso — para você notar que está acelerando.",
                     enabled = config.isEnabled(AlarmType.SPEED_1),
                     onEnabledChange = { setEnabled(AlarmType.SPEED_1, it) },
                     value = config.speedAlarm1Kmh.toFloat(),
@@ -117,6 +131,7 @@ fun AlarmsScreen(
                 )
                 AlarmLevel(
                     label = "Nível 2",
+                    description = "Aviso intermediário, com mais urgência.",
                     enabled = config.isEnabled(AlarmType.SPEED_2),
                     onEnabledChange = { setEnabled(AlarmType.SPEED_2, it) },
                     value = config.speedAlarm2Kmh.toFloat(),
@@ -126,6 +141,7 @@ fun AlarmsScreen(
                 )
                 AlarmLevel(
                     label = "Nível 3 (alta prioridade)",
+                    description = "Aviso forte — perto do limite da roda.",
                     enabled = config.isEnabled(AlarmType.SPEED_3),
                     onEnabledChange = { setEnabled(AlarmType.SPEED_3, it) },
                     value = config.speedAlarm3Kmh.toFloat(),
@@ -135,6 +151,7 @@ fun AlarmsScreen(
                 )
                 AlarmLevel(
                     label = "Aviso antecipado",
+                    description = "Avisa alguns km/h antes do nível, para não ser pego de surpresa.",
                     enabled = config.isEnabled(AlarmType.SPEED_PRE_1),
                     onEnabledChange = { enabled ->
                         update(
@@ -148,11 +165,16 @@ fun AlarmsScreen(
                     unit = " km/h",
                     onCommit = { update(config.copy(preAlarmMarginKmh = it.toDouble())) },
                 )
-                SwitchRow("Alarme do limite da roda (tiltback)", config.speedLimitAlarmEnabled) {
+                SwitchRow(
+                    label = "Alarme do limite da roda (tiltback)",
+                    checked = config.speedLimitAlarmEnabled,
+                    description = "Avisa quando você chega perto da velocidade em que a roda inclina os pedais.",
+                ) {
                     update(config.copy(speedLimitAlarmEnabled = it))
                 }
                 SliderRow(
                     label = "Margem do limite da roda",
+                    description = "Distância (km/h) do tiltback em que o aviso dispara.",
                     value = config.speedLimitMarginKmh.toFloat(),
                     valueRange = 0f..10f,
                     unit = " km/h",
@@ -164,6 +186,7 @@ fun AlarmsScreen(
                 LimitsHint("Corrente de pico do modelo: ${limits.maxCurrentAmps.format(0)} A")
                 AlarmLevel(
                     label = "Bateria baixa",
+                    description = "Avisa quando a carga cair abaixo deste valor.",
                     enabled = config.isEnabled(AlarmType.BATTERY),
                     onEnabledChange = { setEnabled(AlarmType.BATTERY, it) },
                     value = config.batteryAlarmPercent.toFloat(),
@@ -173,6 +196,7 @@ fun AlarmsScreen(
                 )
                 AlarmLevel(
                     label = "Margem de segurança",
+                    description = "Avisa quando a folga de potência ficar abaixo disso (motor perto do limite).",
                     enabled = config.isEnabled(AlarmType.SAFETY_MARGIN),
                     onEnabledChange = { setEnabled(AlarmType.SAFETY_MARGIN, it) },
                     value = config.safetyMarginAlarmPercent.toFloat(),
@@ -182,6 +206,7 @@ fun AlarmsScreen(
                 )
                 AlarmLevel(
                     label = "Corrente de pico",
+                    description = "Avisa em puxadas fortes ou subidas.",
                     enabled = config.isEnabled(AlarmType.CURRENT),
                     onEnabledChange = { enabled ->
                         update(
@@ -212,6 +237,7 @@ fun AlarmsScreen(
                 )
                 AlarmLevel(
                     label = "Temperatura máxima",
+                    description = "Avisa quando qualquer sensor passar deste valor.",
                     enabled = config.isEnabled(AlarmType.TEMPERATURE),
                     onEnabledChange = { setEnabled(AlarmType.TEMPERATURE, it) },
                     value = config.temperatureAlarmCelsius.toFloat(),
@@ -221,6 +247,7 @@ fun AlarmsScreen(
                 )
                 AlarmLevel(
                     label = "Sobretensão",
+                    description = "Avisa se a tensão passar disso (carga ou regen anormal).",
                     enabled = config.isEnabled(AlarmType.OVERVOLTAGE),
                     onEnabledChange = { enabled ->
                         update(
@@ -245,6 +272,7 @@ fun AlarmsScreen(
                 )
                 AlarmLevel(
                     label = "Subtensão",
+                    description = "Avisa se a tensão cair disso (bateria afundando).",
                     enabled = config.isEnabled(AlarmType.UNDERVOLTAGE),
                     onEnabledChange = { enabled ->
                         update(
@@ -309,6 +337,7 @@ private fun AlarmLevel(
     valueRange: ClosedFloatingPointRange<Float>,
     unit: String,
     decimals: Int = 0,
+    description: String? = null,
     onCommit: (Float) -> Unit,
 ) {
     var local by remember(value) { mutableFloatStateOf(value) }
@@ -318,16 +347,24 @@ private fun AlarmLevel(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                label,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (enabled) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                description?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
             Text(
                 formatValue(local, decimals) + unit,
                 style = MaterialTheme.typography.labelLarge,

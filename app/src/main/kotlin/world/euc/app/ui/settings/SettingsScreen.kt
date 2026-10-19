@@ -11,37 +11,31 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import world.euc.app.wheel.WheelConnectionManager
-import world.euc.app.wheel.WheelUiState
-import world.euc.app.ui.components.SegmentedControl
-import world.euc.app.ui.designsystem.EucSpacing
 import world.euc.app.ui.components.SectionCard
+import world.euc.app.ui.components.SegmentedControl
 import world.euc.app.ui.components.SliderRow
 import world.euc.app.ui.components.SwitchRow
+import world.euc.app.ui.designsystem.EucSpacing
+import world.euc.app.wheel.WheelConnectionManager
+import world.euc.app.wheel.WheelUiState
 import world.euc.protocol.model.WheelSettingId
 import kotlin.math.roundToInt
 
@@ -51,6 +45,9 @@ import kotlin.math.roundToInt
  * A tela mostra apenas o que o modelo conectado suporta
  * ([world.euc.protocol.model.WheelCapabilities]): evita opções que o firmware
  * ignoraria silenciosamente (ex.: tilt lateral estendido não existe na V11y).
+ *
+ * Cada ajuste tem uma descrição curta e, quando depende de outro (ex.: os
+ * modos separados), fica **inativo** enquanto o ajuste principal está desligado.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,13 +80,15 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = EucSpacing.screen),
+            verticalArrangement = Arrangement.spacedBy(EucSpacing.md),
         ) {
             SectionCard("Condução") {
                 if (WheelSettingId.SPEED_LIMIT in capabilities) {
                     SliderRow(
                         label = "Limite de velocidade (tiltback)",
+                        description = "Velocidade em que a roda inclina os pedais para trás. " +
+                            "Os alarmes de velocidade devem ficar abaixo disso.",
                         // O quadro de configurações da V11y traz esse campo em
                         // unidades de 0,5 km/h (valor descartado); nesse caso vale
                         // o que a telemetria reporta.
@@ -110,11 +109,18 @@ fun SettingsScreen(
                             onSelect = { scope.launch { manager.setRidingMode(it) } },
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        Text(
+                            "Comfort é mais suave e econômico; Sport responde mais rápido e mantém a velocidade com mais firmeza.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
                 if (WheelSettingId.PEDAL_TILT in capabilities) {
                     SliderRow(
                         label = "Tilt dos pedais",
+                        description = "Inclinação da plataforma em relação ao chão. " +
+                            "Positivo deixa a ponta dos pés mais alta.",
                         value = (settings.pedalTiltDegrees ?: 0.0).toFloat(),
                         valueRange = -10f..10f,
                         unit = "°",
@@ -125,6 +131,8 @@ fun SettingsScreen(
                 if (WheelSettingId.PEDAL_SENSITIVITY in capabilities) {
                     SliderRow(
                         label = "Sensibilidade dos pedais",
+                        description = "O quanto o pedal responde ao seu peso. " +
+                            "Mais alto = mais ágil; mais baixo = mais firme em velocidade.",
                         value = (settings.pedalSensitivityPercent ?: 100).toFloat(),
                         valueRange = 0f..100f,
                         unit = " %",
@@ -132,17 +140,30 @@ fun SettingsScreen(
                     )
                 }
                 if (WheelSettingId.PERFORMANCE_MODE in capabilities) {
-                    SwitchRow("Modo performance", local.performanceMode) {
+                    SwitchRow(
+                        label = "Modo performance",
+                        checked = local.performanceMode,
+                        description = "Libera mais potência e resposta — consome mais bateria.",
+                    ) {
                         scope.launch { manager.setPerformanceMode(it) }
                     }
                 }
                 if (WheelSettingId.LOW_BATTERY_RIDING in capabilities) {
-                    SwitchRow("Rodar com bateria baixa", local.lowBatteryRiding) {
+                    SwitchRow(
+                        label = "Rodar com bateria baixa",
+                        checked = local.lowBatteryRiding,
+                        description = "Permite continuar andando com a bateria no fim, em velocidade reduzida.",
+                    ) {
                         scope.launch { manager.setLowBatteryRiding(it) }
                     }
                 }
                 if (WheelSettingId.MOTOR_NO_LOAD_DETECTION in capabilities) {
-                    SwitchRow("Detecção de motor sem carga", local.motorNoLoadDetection) {
+                    SwitchRow(
+                        label = "Detecção de motor sem carga",
+                        checked = local.motorNoLoadDetection,
+                        description = "Desliga o motor se ele girar sem carga (roda levantada), " +
+                            "evitando aceleração descontrolada.",
+                    ) {
                         scope.launch { manager.setMotorNoLoadDetection(it) }
                     }
                 }
@@ -167,12 +188,23 @@ fun SettingsScreen(
             }
 
             if (WheelSettingId.SPLIT_RIDING_MODES in capabilities) {
+                val splitEnabled = settings.splitRidingModesEnabled == true
                 SectionCard("Modos separados (aceleração/frenagem)") {
-                    SwitchRow("Ativar", settings.splitRidingModesEnabled ?: false) {
+                    SwitchRow(
+                        label = "Ativar",
+                        checked = splitEnabled,
+                        description = "Ajusta aceleração e frenagem independentes, em vez de um único perfil.",
+                    ) {
                         scope.launch { manager.setSplitRidingModes(it) }
                     }
                     SliderRow(
                         label = "Aceleração",
+                        description = if (splitEnabled) {
+                            "Resposta ao acelerar: mais alto = mais agressivo."
+                        } else {
+                            "Ligue os modos separados para ajustar."
+                        },
+                        enabled = splitEnabled,
                         value = (settings.splitRidingAccelerationPercent ?: 50).toFloat(),
                         valueRange = 0f..100f,
                         unit = " %",
@@ -187,6 +219,12 @@ fun SettingsScreen(
                     )
                     SliderRow(
                         label = "Frenagem",
+                        description = if (splitEnabled) {
+                            "Resposta ao frear: mais alto = freia mais forte."
+                        } else {
+                            "Ligue os modos separados para ajustar."
+                        },
+                        enabled = splitEnabled,
                         value = (settings.splitRidingBrakingPercent ?: 50).toFloat(),
                         valueRange = 0f..100f,
                         unit = " %",
@@ -204,18 +242,32 @@ fun SettingsScreen(
 
             SectionCard("Iluminação") {
                 if (WheelSettingId.DAYTIME_RUNNING_LIGHTS in capabilities) {
-                    SwitchRow("Luzes diurnas (DRL)", local.daytimeRunningLightsOn) {
+                    SwitchRow(
+                        label = "Luzes diurnas (DRL)",
+                        checked = local.daytimeRunningLightsOn,
+                        description = "Luz de posição sempre acesa enquanto a roda está ligada.",
+                    ) {
                         scope.launch { manager.setDaytimeRunningLights(it) }
                     }
                 }
                 if (WheelSettingId.HEADLIGHT in capabilities) {
-                    SwitchRow("Farol", local.headlightOn) {
+                    SwitchRow(
+                        label = "Farol",
+                        checked = local.headlightOn,
+                        description = "Farol principal da roda.",
+                    ) {
                         scope.launch { manager.setHeadlight(it) }
                     }
                 }
                 if (WheelSettingId.HEADLIGHT_BRIGHTNESS in capabilities) {
                     SliderRow(
                         label = "Brilho do farol",
+                        description = if (local.headlightOn) {
+                            "Intensidade do farol enquanto ele estiver ligado."
+                        } else {
+                            "Ligue o farol para ajustar o brilho."
+                        },
+                        enabled = local.headlightOn,
                         value = local.headlightBrightness.toFloat(),
                         valueRange = 0f..100f,
                         unit = " %",
@@ -228,6 +280,7 @@ fun SettingsScreen(
                 if (WheelSettingId.SPEAKER_VOLUME in capabilities) {
                     SliderRow(
                         label = "Volume do alto-falante",
+                        description = "Volume da música e dos avisos pelo alto-falante da roda.",
                         value = (settings.speakerVolumePercent ?: 20).toFloat(),
                         valueRange = 0f..100f,
                         unit = " %",
@@ -235,12 +288,25 @@ fun SettingsScreen(
                     )
                 }
                 if (WheelSettingId.COOLING_FAN in capabilities) {
-                    SwitchRow("Ventilador", local.fanOn) {
+                    SwitchRow(
+                        label = "Ventilador",
+                        checked = local.fanOn,
+                        description = "Liga o ventilador de refrigeração da controladora.",
+                    ) {
                         scope.launch { manager.setCoolingFan(it) }
                     }
                 }
                 if (WheelSettingId.COOLING_FAN_QUIET_MODE in capabilities) {
-                    SwitchRow("Ventilador silencioso", local.fanQuietMode) {
+                    SwitchRow(
+                        label = "Ventilador silencioso",
+                        checked = local.fanQuietMode,
+                        description = if (local.fanOn) {
+                            "Reduz o ruído do ventilador, com um pouco menos de refrigeração."
+                        } else {
+                            "Ligue o ventilador para usar o modo silencioso."
+                        },
+                        enabled = local.fanOn,
+                    ) {
                         scope.launch { manager.setCoolingFanQuietMode(it) }
                     }
                 }
@@ -294,7 +360,7 @@ fun SettingsScreen(
                     }
                 }
                 if (WheelSettingId.CALIBRATION in capabilities) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(EucSpacing.md)) {
                         OutlinedButton(
                             onClick = { calibrationTarget = "giroscópio" },
                             modifier = Modifier.weight(1f),
@@ -308,6 +374,12 @@ fun SettingsScreen(
                             Text("Zerar pedais")
                         }
                     }
+                    Text(
+                        "Faz só com a roda parada, nivelada e apoiada. " +
+                            "O giroscópio corrige a horizontal; zerar pedais reinicia o ponto neutro.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
