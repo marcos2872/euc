@@ -176,7 +176,7 @@ private fun SpeedHeroCard(state: WheelUiState) {
                 .fillMaxWidth()
                 // Altura ajustada ao arco (240°): o medidor ocupa a largura do
                 // cartão sem deixar vão até a linha de limite/modo/margem.
-                .aspectRatio(1.32f),
+                .aspectRatio(1.22f),
             contentAlignment = Alignment.Center,
         ) {
             SpeedGauge(

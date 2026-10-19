@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -37,6 +40,18 @@ private const val GAUGE_SWEEP_ANGLE = 240f
 private const val ARC_VERTICAL_FRACTION = 0.75f
 
 /**
+ * Deslocamento do centro do círculo, para o *arco* (e não o círculo) ficar
+ * centralizado na caixa: metade da sobra vertical (0,25 do raio).
+ */
+private const val ARC_CENTER_SHIFT = 0.125f
+
+/** Espessura do arco do velocímetro. */
+private val GAUGE_STROKE = 16.dp
+
+/** Respiro entre o arco (com brilho e marcas) e a borda da caixa. */
+private val GAUGE_BREATHING_ROOM = 18.dp
+
+/**
  * Velocímetro circular: arco em gradiente ciano → lima (o arco do logo), marcas
  * a cada 5 km/h e a marca do limite (tiltback) da roda.
  *
@@ -62,21 +77,22 @@ fun SpeedGauge(
     val tickColor = MaterialTheme.colorScheme.outline
     val limitColor = MaterialTheme.colorScheme.secondary
 
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+        val density = LocalDensity.current
+        val widthPx = with(density) { maxWidth.toPx() }
+        val heightPx = with(density) { maxHeight.toPx() }
+        val marginPx = with(density) { (GAUGE_STROKE + GAUGE_BREATHING_ROOM).toPx() }
+        // O arco de 240° ocupa ~75% da altura do diâmetro. Ele é desenhado
+        // centralizado na própria caixa (o círculo fica deslocado para baixo),
+        // então o diâmetro pode chegar à largura do cartão sem cortar o topo.
+        val diameter = min(widthPx - marginPx, (heightPx - marginPx) / ARC_VERTICAL_FRACTION)
+        val contentOffset = with(density) { (diameter * ARC_CENTER_SHIFT).toDp() }
+
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val stroke = 16.dp.toPx()
-            // O arco é sempre circular e ocupa ~75% da altura do diâmetro (240°
-            // de abertura), então o diâmetro pode ser limitado pela largura —
-            // sem sobrar vão entre o medidor e o que vem abaixo.
-            val margin = stroke + 16.dp.toPx()
-            val diameter = min(size.width - margin, (size.height - margin) / ARC_VERTICAL_FRACTION)
-            val inset = Offset(
-                (size.width - diameter) / 2f,
-                (size.height - diameter) / 2f,
-            )
+            val stroke = with(density) { GAUGE_STROKE.toPx() }
+            val center = Offset(size.width / 2f, size.height / 2f + diameter * ARC_CENTER_SHIFT)
+            val topLeft = Offset(center.x - diameter / 2f, center.y - diameter / 2f)
             val arcSize = Size(diameter, diameter)
-            val topLeft = inset
-            val center = Offset(size.width / 2, size.height / 2)
             val gradient = Brush.linearGradient(
                 colors = accents.gaugeGradient,
                 start = Offset(0f, size.height),
@@ -149,6 +165,7 @@ fun SpeedGauge(
         }
 
         Column(
+            modifier = Modifier.offset(y = contentOffset),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
