@@ -40,7 +40,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import world.euc.app.ui.components.ActionButton
-import world.euc.app.ui.components.BmsCard
 import world.euc.app.ui.components.ChartSample
 import world.euc.app.ui.components.ChoiceFlowRow
 import world.euc.app.ui.components.EucCard
@@ -120,7 +119,6 @@ fun DashboardScreen(
             RingsCard(state.telemetry)
             DistanceCard(state)
             TelemetryCard(state.telemetry)
-            BmsCard(state.bms)
             LiveChartsCard(state.history)
             QuickActionsCard(
                 lightOn = state.local.headlightOn,
