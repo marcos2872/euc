@@ -9,9 +9,11 @@
 > **Regra:** nada aqui deve ser implementado sem captura/teste na roda — a coluna
 > "o que já funciona" existe para não regredir o que está validado.
 >
-> **Status (out/2026):** §2 (correções de doc) **concluído**; §1.1 com medida interina
-> (modos separados escondidos até a captura); §1.2, §1.3 e §3.x dependem de
-> captura/teste na roda (§4.1/§4.2).
+> **Status (out/2026):** §2 (correções de doc) **concluído**; **captura feita na V11y**
+> com a sonda do app (§4.1) — **auth confirmada** e **BMS por célula capturado**
+> (§3.1: parser + UI prontos, falta o alarme de desequilíbrio); §1.1 aguarda o
+> opcode dos modos separados; §1.2 aguarda teste do mute/alça; §3.2 aguarda os
+> bytes de `02 05`/`02 07`.
 
 ---
 
@@ -64,15 +66,19 @@
 - [ ] testar botão da alça
 - [ ] testar mute (se a UI expuser)
 
-### 1.3 🟠 Autenticação / lock sem validação
+### 1.3 ✅ auth confirmada — Lock sem validação na roda
 
 - **O que está certo:** o handshake do doc 03 §4 está implementado corretamente
   (`InmotionV2Commands.requestAuthKey()`/`verifyAuth()`: `13 04 02 00 00 02` →
   `13 14 02 00 00 82 <blob>`).
-- **O que falta:** confirmar na V11y que o lock realmente engata depois do handshake
-  (a roda precisa estar **parada e apoiada**).
+- **Confirmado em captura (out/2026):** a V11y respondeu `auth: confirmada` — a roda
+  devolveu o blob de 16 bytes (`EF 87 64 A4 2B 43 2D E0 F2 E9 99 99 14 45 63 7B`),
+  aceitou o eco (`02 80 82 01`) e a sessão ficou autenticada. A resposta vem no tipo
+  `0x12` (não `0x13`) — detalhe para a doc.
+- **O que falta:** confirmar que o **lock engata** depois do handshake (a roda precisa
+  estar parada e apoiada).
+- [x] capturar o handshake (bytes confirmados)
 - [ ] testar lock com a roda parada
-- [ ] capturar o handshake do app oficial e comparar byte a byte
 
 ### 1.4 ✅ decidido — Comandos implementados mas sem uso/validação
 
@@ -104,24 +110,39 @@
 
 ## 3. Funcionalidades novas (que o app oficial tem)
 
-### 3.1 🔴 BMS por célula na V11y (prioridade alta — a roda expõe)
+### 3.1 🟢 BMS por célula na V11y — parser e UI prontos (falta o alarme)
 
 - O app oficial tem módulo próprio (`v11_bms_info`) com **tensões de célula, log e
   proteções**; o nosso só lê `05` (bateria em tempo real).
-- **Ação:** ler as tensões de célula (rotas `02 24/25/26/27` — doc 03 §7), guardar
-  min/máx/delta e mostrar numa tela de bateria (com alarme de desequilíbrio).
-- **Modelos:** V11/V11y, V13, V14, V18, X1, P6, E25, LE1, LR1 (`FullBMSFeatureCmdTrait`).
-- [ ] capturar as respostas de célula na V11y
-- [ ] parser + modelo (`WheelBms`) com testes
-- [ ] UI (tela/expansão no painel) + alarme de delta de célula
+- **Capturado na V11y (out/2026)** com a sonda (§4.1): rotas `02 24`/`02 25`
+  (packs 1 e 2) respondem **info** (`sub 01`) e **células** (`sub 02`, 20 × u16 LE em
+  mV); `02 26`/`02 27` ficam em silêncio. Offsets e escalas em
+  `docs/03-protocolo-inmotion.md` §7.
+- **Feito:**
+  - `InmotionV2BmsParser` + `WheelBms`/`BmsPack` + testes com os quadros reais
+    (a soma das 20 células fecha com a tensão do pack: 81,30 V)
+  - consultas `readBmsInfo`/`readBmsCells`, polling de ~20 s na sessão e
+    `SessionEvent.BmsReceived`
+  - UI: cartão "Bateria (BMS)" no painel + tela **Info** com célula a célula
+  - bônus: `readBatterySerialNumbers()` (`02 03`) — a V11y devolve os dois seriais
+- [x] capturar as respostas de célula na V11y
+- [x] parser + modelo (`WheelBms`) com testes
+- [x] UI (cartão no painel + tela Info)
+- [ ] alarme de delta de célula (ex.: avisar acima de 30 mV)
 
-### 3.2 🟠 Extras de identificação na tela "Sobre"
+### 3.2 🟡 Extras de identificação — parcialmente capturado
 
 - Comandos do app oficial: `genGetDeviceInfoMsg`, `genGetMotorSnMsg`,
   `genGetBatterySnMsg`, `genGetHwVersionMsg`, `genGetActivateDateMsg` (§3.2).
-- **Ação:** ler na conexão e mostrar (SN do motor, SN da bateria, HW, data de ativação).
-- [ ] capturar os bytes
-- [ ] implementar leitura + exibição
+- **Capturado na V11y (out/2026):**
+  - `02 03` → `82 03 <ascii>`: **seriais das baterias** (2, separados por vírgula) —
+    parser implementado (`readBatterySerialNumbers()`)
+  - `02 04` → devolve o **mesmo serial** de `02 02` (veículo/BT)
+  - `02 05` → 2 bytes (`24 45` = 17700) — **não identificado** (HW? data?)
+  - `02 07` → 2 bytes (`E4 02` = 740) — **não identificado**
+- [x] capturar os bytes que existem
+- [ ] identificar `02 05`/`02 07` (candidatos: HW version e data de ativação)
+- [ ] ler `02 03` na conexão e mostrar os seriais na tela Info
 
 ### 3.3 🟠 Alarmes/proteções do BMS na UI
 
@@ -141,6 +162,10 @@ para a V11y hoje.
 ## 4. Como validar
 
 ### 4.1 Captura BLE do app oficial (fecha a maioria das lacunas)
+
+> **Feito em out/2026 pela alternativa abaixo** (sonda no próprio app): auth, BMS por
+> célula, seriais de bateria e as rotas que **não** respondem na V11y. O app oficial
+> continua necessário apenas para o **opcode dos modos separados** (§1.1).
 
 1. No Android: *Opções de desenvolvedor* → **"Ativar registro de HCI snoop"** +
    "arquivo de log Bluetooth".

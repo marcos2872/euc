@@ -264,13 +264,59 @@ Observações:
 - O contador de tempo do quadro de viagem incrementa 1 por segundo (confirmado em captura).
 - A V11y responde aos dois quadros; modelos que não responderem devolvem `null` no parser.
 
-## 7. Bateria V2
+## 7. Bateria V2 (BMS) — validado na V11y
+
+### 7.1 Rotas de consulta
+
+Tipo `0x16` (estendido), payload `02 <rota> <sub>`:
+
+| Rota | Pack | Sub | Resposta | Conteúdo |
+|---|---|---|---|---|
+| `02 24` | 1 | `01` | `<rota> 02 81 …` | info geral (tensão, SOC, máx/mín de célula, temperaturas) |
+| `02 24` | 1 | `02` | `<rota> 02 82 …` | 20 tensões de célula (u16 LE, mV) |
+| `02 25` | 2 | idem | idem | idem |
+| `02 26` / `02 27` | 3 / 4 | idem | — | **não respondem na V11y** (modelos de 4 packs: V12/V13/V14) |
+
+Capturado numa V11y real (fw 2.5.54, out/2026): as rotas 1 e 2 respondem; 3 e 4
+ficam em silêncio (sem erro). O `sub` volta como `0x80 | sub` no terceiro byte.
+
+### 7.2 Offsets
+
+**Info** (payload sem os 3 bytes `<rota> 02 81`), u16 little-endian:
+
+| Offset | Campo | Escala |
+|---|---|---|
+| 6 | Tensão do pack* | /100 V |
+| 10 | Id do board (2 e 3 na V11y) | — |
+| 12 | Carga (SOC) | /100 % |
+| 18 | Tensão da célula mais alta | mV |
+| 20 | Tensão da célula mais baixa | mV |
+| 24-35 | Temperaturas (12 sensores) | `byte − 176` °C |
+
+\* Confere com a soma das células (20 × ~4.065 mV = 81,30 V) — validado em captura.
+
+**Células**: 20 × u16 LE em mV a partir do offset 3 do payload (43 bytes no total).
+
+Campos ainda não identificados no quadro de info (offsets 2-4, 8-9, 14-17, 22-23,
+36-39) ficam como **[INF]** — o parser ignora.
+
+### 7.3 Seriais de bateria
+
+`02 03` (tipo `0x11`) → `82 03 <ascii>`: a V11y devolve os seriais dos dois packs
+separados por vírgula (`B098S5C00138,B098S5C00186`).
+
+### 7.4 Implementação no app
+
+- Parser: `InmotionV2BmsParser` (testes com os quadros reais capturados).
+- Consultas: `InmotionV2Commands.readBmsInfo(pack)` / `readBmsCells(pack)`.
+- Sessão: consulta na inicialização e a cada ~20 s (`bmsPollEveryTicks`), publicando
+  `SessionEvent.BmsReceived` (info e células se juntam por pack).
+- UI: cartão "Bateria (BMS)" no painel e detalhe (célula a célula) na tela **Info**.
+
+### 7.5 Notas históricas
 
 **[APK]** EUC World consulta por pack: `02 24 01/02`, `02 25 …`, `02 26 …`, `02 27 …` (tipo `0x16`).
 Modelos com 4 packs: V14/V13/V12 (via hash de modelo nas linhas 2872-2930).
-
-**[COM]** Resposta de tensões: 32 × u16 LE em mV. Status por pack: byte 0 = bit0 valid / bit1 enabled.
-
 **[COM]** Bateria % do V14 = média arredondada dos packs 1 e 2 (clamp 0-100).
 **[COM]** V1 (pré-V11): percentual **não vem no fio** — derivado de curva tensão→% por modelo.
 

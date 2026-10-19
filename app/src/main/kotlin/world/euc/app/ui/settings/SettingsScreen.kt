@@ -29,8 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
-import world.euc.app.BuildConfig
-import world.euc.app.debug.ProtocolProbes
 import world.euc.app.ui.components.SectionCard
 import world.euc.app.ui.components.SegmentedControl
 import world.euc.app.ui.components.SliderRow
@@ -391,33 +389,6 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text("Sobre e diagnóstico")
-                }
-            }
-
-            if (BuildConfig.DEBUG) {
-                SectionCard("Sonda de protocolo (debug)") {
-                    Text(
-                        "Descobre os bytes que faltam no protocolo enviando quadros candidatos. " +
-                            "Conecte na roda antes de usar — pedidos e respostas ficam no logcat " +
-                            "(tag EucSession).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    ProtocolProbes.ALL.forEach { probe ->
-                        Column(verticalArrangement = Arrangement.spacedBy(EucSpacing.xs)) {
-                            OutlinedButton(
-                                onClick = { scope.launch { manager.probe(probe) } },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(probe.label)
-                            }
-                            Text(
-                                probe.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
                 }
             }
         }

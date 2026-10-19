@@ -41,7 +41,17 @@ class InmotionV2SessionTest {
 
         link.emit(TestFrames.settings())
         runCurrent()
-        assertEquals(4, link.writtenProtocolPayloads().size)
+        advanceTimeBy(1_000); runCurrent()
+        // Depois dos settings vêm as consultas de BMS: info + células de cada pack.
+        assertEquals(
+            listOf(
+                byteArrayOf(0x02, 0x24, 0x01),
+                byteArrayOf(0x02, 0x24, 0x02),
+                byteArrayOf(0x02, 0x25, 0x01),
+                byteArrayOf(0x02, 0x25, 0x02),
+            ).map { it.toList() },
+            link.writtenProtocolPayloads().drop(4).map { it.toList() },
+        )
     }
 
     @Test
@@ -121,9 +131,10 @@ class InmotionV2SessionTest {
         repeat(4) { runCurrent() }
 
         answerInitialization(link)
+        advanceTimeBy(1_000); runCurrent() // deixa as consultas de BMS da inicialização passarem
 
         session.send(InmotionV2Commands.horn())
-        runCurrent()
+        advanceTimeBy(200); runCurrent()
 
         assertEquals(1, link.writeCount(byteArrayOf(0x60, 0x51, 0x18, 0x01)))
     }

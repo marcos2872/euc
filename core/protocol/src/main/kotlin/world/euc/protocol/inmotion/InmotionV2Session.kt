@@ -13,6 +13,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import world.euc.protocol.link.WheelLink
+import world.euc.protocol.model.WheelBms
 import world.euc.protocol.model.WheelSettings
 import world.euc.protocol.model.WheelStatistics
 import world.euc.protocol.model.WheelTelemetry
@@ -40,6 +41,8 @@ class InmotionV2Session(
     private val telemetryParser = InmotionV2TelemetryParser()
     private val settingsParser = InmotionV2SettingsParser()
     private val statisticsParser = InmotionV2StatisticsParser()
+    private val bmsParser = InmotionV2BmsParser()
+    private var bms = WheelBms()
     private val queue = Channel<QueuedCommand>(config.queueCapacity)
     private val responseWaiter = AtomicReference<ResponseWaiter?>(null)
     private val authKeyChannel = AtomicReference<Channel<ByteArray>?>(null)
@@ -57,6 +60,7 @@ class InmotionV2Session(
      */
     fun start(scope: CoroutineScope): Job = scope.launch {
         reader.reset()
+        bms = WheelBms()
         coroutineScope {
             launch { receiveLoop() }
             launch { commandLoop() }
@@ -90,6 +94,20 @@ class InmotionV2Session(
         query(InmotionV2Commands.readSerialNumber())
         query(InmotionV2Commands.readFirmwareVersions())
         query(InmotionV2Commands.readSettings())
+        queryBms()
+    }
+
+    /**
+     * Consulta os quadros de BMS de cada pack (info + células).
+     *
+     * São consultas "poll": o firmware de alguns modelos não responde e a fila
+     * não deve ficar presa em timeout por causa disso.
+     */
+    private suspend fun queryBms() {
+        repeat(config.bmsPackCount) { pack ->
+            poll(InmotionV2Commands.readBmsInfo(pack + 1))
+            poll(InmotionV2Commands.readBmsCells(pack + 1))
+        }
     }
 
     private suspend fun receiveLoop() {
@@ -152,6 +170,15 @@ class InmotionV2Session(
                     "splitAtivo=${settings.splitRidingModesEnabled} tiltEstendido=${settings.extendedLateralTiltLimit}",
             )
             _events.tryEmit(SessionEvent.SettingsReceived(settings))
+        }
+        bmsParser.parse(frame)?.let { pack ->
+            // Info e células chegam em quadros separados: junta por pack.
+            bms = bms.mergedWith(WheelBms(listOf(pack)))
+            config.logger?.invoke(
+                "bms pack ${pack.index}: tensao=${pack.voltageVolts} carga=${pack.socPercent} " +
+                    "celulas=${pack.cellsMv.size} delta=${pack.cellDeltaMv} mV",
+            )
+            _events.tryEmit(SessionEvent.BmsReceived(bms))
         }
     }
 
@@ -235,6 +262,13 @@ class InmotionV2Session(
             if (tick % config.totalPollEveryTicks == 0L) {
                 queue.trySend(QueuedCommand.Poll(InmotionV2Commands.readTotalStatistics()))
             }
+            // BMS: células mudam devagar — atualiza a cada ~20 s.
+            if (tick % config.bmsPollEveryTicks == 0L) {
+                repeat(config.bmsPackCount) { pack ->
+                    queue.trySend(QueuedCommand.Poll(InmotionV2Commands.readBmsInfo(pack + 1)))
+                    queue.trySend(QueuedCommand.Poll(InmotionV2Commands.readBmsCells(pack + 1)))
+                }
+            }
             tick += 1
         }
     }
@@ -276,6 +310,10 @@ data class SessionConfig(
     val tripPollEveryTicks: Long = 4,
     /** Consulta dos totais da roda: 1 a cada N ciclos de polling (20 = 10 s). */
     val totalPollEveryTicks: Long = 20,
+    /** Consulta de BMS (info + células por pack): 1 a cada N ciclos (40 = 20 s). */
+    val bmsPollEveryTicks: Long = 40,
+    /** Quantos packs de BMS consultar (a V11y tem 2; V12/V13/V14 têm 4). */
+    val bmsPackCount: Int = 2,
     val queueCapacity: Int = 32,
     /** Recebe linhas de diagnóstico (hex de TX/RX e handshake). */
     val logger: ((String) -> Unit)? = null,
@@ -301,6 +339,9 @@ sealed interface SessionEvent {
 
     /** Odômetros (viagem/totais) recebidos — apenas os campos reportados. */
     data class StatisticsReceived(val statistics: WheelStatistics) : SessionEvent
+
+    /** Estado do BMS (packs e células) — acumulado entre quadros de info e células. */
+    data class BmsReceived(val bms: WheelBms) : SessionEvent
 
     /** Handshake de autenticação concluído (ou não). */
     data class AuthenticationCompleted(val success: Boolean) : SessionEvent

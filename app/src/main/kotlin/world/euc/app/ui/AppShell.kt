@@ -61,6 +61,7 @@ import world.euc.app.ui.dashboard.DashboardScreen
 import world.euc.app.ui.designsystem.EucMotion
 import world.euc.app.ui.designsystem.EucSpacing
 import world.euc.app.ui.designsystem.PillShape
+import world.euc.app.ui.info.InfoScreen
 import world.euc.app.ui.settings.SettingsScreen
 import world.euc.app.ui.tour.TourDetailScreen
 import world.euc.app.ui.tour.ToursScreen
@@ -86,6 +87,9 @@ sealed interface EucRoute : NavKey {
     data object Settings : EucRoute
 
     @Serializable
+    data object Info : EucRoute
+
+    @Serializable
     data object About : EucRoute
 
     @Serializable
@@ -98,6 +102,7 @@ private val ConnectedTabs = listOf(
     ShellTab(EucRoute.Dashboard, "Painel", Icons.Default.Speed),
     ShellTab(EucRoute.Tours, "Passeios", Icons.Default.Timeline),
     ShellTab(EucRoute.Alarms, "Alarmes", Icons.Default.Notifications),
+    ShellTab(EucRoute.Info, "Info", Icons.Default.Info),
     ShellTab(EucRoute.Settings, "Ajustes", Icons.Default.Settings),
 )
 
@@ -114,6 +119,7 @@ private fun routeForScreen(screen: String?): EucRoute? = when (screen?.lowercase
     "tours" -> EucRoute.Tours
     "alarms" -> EucRoute.Alarms
     "settings" -> EucRoute.Settings
+    "info" -> EucRoute.Info
     "about" -> EucRoute.About
     else -> null
 }
@@ -218,6 +224,14 @@ fun EucApp(
                         state = state,
                         onBack = { goBack(EucRoute.Dashboard) },
                         onOpenAbout = { backStack.add(EucRoute.About) },
+                    )
+                }
+
+                entry<EucRoute.Info> {
+                    InfoScreen(
+                        manager = manager,
+                        state = state,
+                        onBack = { goBack(EucRoute.Dashboard) },
                     )
                 }
 

@@ -345,6 +345,10 @@ nesta análise (lacuna de método, ver §11). O que o app oficial **confirma**:
 `02 24 01/02`, `02 25 …`, `02 26 …`, `02 27 …`; resposta de tensões = **32 × u16 LE
 em mV**; status por pack: byte 0 bit0 valid / bit1 enabled; V14 usa média dos packs 1–2
 para o %.
+**[CAP] V11y (fw 2.5.54, out/2026):** `02 24`/`02 25` respondem (packs 1 e 2);
+`02 26`/`02 27` ficam em silêncio; as células são **20** (não 32) u16 LE em mV e a
+resposta de info traz tensão/SOC/máx/mín/12 temperaturas — offsets validados no
+doc 03 §7 (a soma das 20 células fecha com a tensão do pack).
 [INF] O 4º pack (`bms4Board`) cobre V13/V14/V18; `FullBMSFeature` vs
 `SimpleBMSFeature` é o flag de capacidade que decide quantos packs/rotas consultar.
 

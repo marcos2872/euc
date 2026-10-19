@@ -178,4 +178,22 @@ class InmotionV2CommandsTest {
             frame,
         )
     }
+
+    @Test
+    fun `consultas de BMS usam as rotas 0x24 a 0x27 no tipo estendido`() {
+        val info = InmotionV2Commands.readBmsInfo(pack = 1)
+        val cells = InmotionV2Commands.readBmsCells(pack = 2)
+
+        assertEquals(InmotionFrameType.EXTENDED, info.frameType)
+        assertContentEquals(byteArrayOf(0x02, 0x24, 0x01), info.payload)
+        assertContentEquals(byteArrayOf(0x02, 0x25, 0x02), cells.payload)
+    }
+
+    @Test
+    fun `serial das baterias usa o comando 02 03`() {
+        val serial = InmotionV2Commands.readBatterySerialNumbers()
+
+        assertEquals(InmotionFrameType.INITIAL, serial.frameType)
+        assertContentEquals(byteArrayOf(0x02, 0x03), serial.payload)
+    }
 }

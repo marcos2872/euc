@@ -45,6 +45,14 @@ object InmotionV2Commands {
     private const val ROUTING_AUTH_0 = 0x02
     private const val ROUTING_AUTH_1 = 0x00
 
+    /** Rotas de BMS: pack 1 = `0x24` … pack 4 = `0x27`. */
+    private const val BMS_ROUTE_BASE = 0x23
+    private val BMS_PACKS = 1..4
+
+    /** Subcomandos de BMS: info geral e tensões de célula. */
+    private const val BMS_SUB_INFO = 0x01
+    private const val BMS_SUB_CELLS = 0x02
+
     // ---------------------------------------------------------------- consultas
 
     /** Consulta o modelo (carType). Resposta: comando 0x81. */
@@ -70,6 +78,36 @@ object InmotionV2Commands {
 
     /** Consulta os dados de bateria. Resposta: comando 0x85. */
     fun readBattery(): InmotionCommand = command(InmotionFrameType.DEFAULT, 0x05)
+
+    /**
+     * Consulta o serial das baterias (`02 03`).
+     *
+     * A V11y devolve os seriais dos packs separados por vírgula
+     * (`B098S5C00138,B098S5C00186`) — ver
+     * [InmotionV2Responses.parseBatterySerialNumbers].
+     */
+    fun readBatterySerialNumbers(): InmotionCommand = command(InmotionFrameType.INITIAL, 0x02, 0x03)
+
+    /**
+     * Consulta o quadro de informação geral do BMS do pack [pack] (1-4).
+     *
+     * Validado na V11y (2 packs): responde no tipo `0x16` com
+     * `<rota> 02 81 …` — ver [InmotionV2BmsParser].
+     */
+    fun readBmsInfo(pack: Int): InmotionCommand = bmsRoute(pack, BMS_SUB_INFO)
+
+    /**
+     * Consulta as tensões de célula do BMS do pack [pack] (1-4).
+     *
+     * A V11y responde com 20 células (u16 LE em mV); as rotas 3 e 4
+     * (`02 26`/`02 27`) não respondem — são dos modelos de 4 packs.
+     */
+    fun readBmsCells(pack: Int): InmotionCommand = bmsRoute(pack, BMS_SUB_CELLS)
+
+    private fun bmsRoute(pack: Int, sub: Int): InmotionCommand {
+        require(pack in BMS_PACKS) { "pack de BMS deve ser 1-4" }
+        return command(InmotionFrameType.EXTENDED, 0x02, BMS_ROUTE_BASE + pack, sub)
+    }
 
     // ---------------------------------------------------------------- controle
 

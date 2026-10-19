@@ -91,6 +91,24 @@ class InmotionV2ResponsesTest {
         assertNull(InmotionV2Responses.parseFirmwareVersions(values))
     }
 
+    @Test
+    fun `le os seriais de bateria do quadro 82 03 capturado na V11y`() {
+        // Quadro real da V11y (2 packs): "B098S5C00138,B098S5C00186"
+        val frame = InmotionFrame(
+            InmotionFrameType.INITIAL,
+            0x11,
+            hex("82 03 42 30 39 38 53 35 43 30 30 31 33 38 2C 42 30 39 38 53 35 43 30 30 31 38 36 00 00"),
+        )
+
+        assertEquals(
+            listOf("B098S5C00138", "B098S5C00186"),
+            InmotionV2Responses.parseBatterySerialNumbers(frame),
+        )
+    }
+
+    private fun hex(bytes: String): ByteArray =
+        bytes.trim().split(' ').map { it.toInt(16).toByte() }.toByteArray()
+
     private fun decode(bytes: ByteArray): InmotionFrame =
         requireNotNull(InmotionV2Framing.decode(bytes))
 }

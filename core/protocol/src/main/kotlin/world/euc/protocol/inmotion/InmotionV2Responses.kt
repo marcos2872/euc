@@ -58,6 +58,25 @@ object InmotionV2Responses {
     }
 
     /**
+     * Extrai os seriais de bateria da resposta `82 03 …`.
+     *
+     * A V11y devolve os seriais dos packs separados por vírgula
+     * (`B098S5C00138,B098S5C00186`), terminados em NUL.
+     */
+    fun parseBatterySerialNumbers(frame: InmotionFrame): List<String>? {
+        val payload = frame.payload
+        if (payload.size < 4) return null
+        if (payload[0].toInt() and 0xFF != 0x82 || payload[1].toInt() and 0xFF != 0x03) return null
+
+        return String(payload.copyOfRange(2, payload.size), Charsets.US_ASCII)
+            .trimEnd('\u0000', ' ')
+            .split(',')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .takeIf { it.isNotEmpty() }
+    }
+
+    /**
      * Extrai as versões de firmware da resposta `82 06 …`.
      *
      * Cada versão é montada como `maior.menor.patch`, com os bytes em

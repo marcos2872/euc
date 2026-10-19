@@ -25,6 +25,8 @@ import world.euc.protocol.alarm.AlarmEngine
 import world.euc.protocol.alarm.AlarmLimits
 import world.euc.protocol.alarm.clampedTo
 import world.euc.protocol.discovery.WheelProtocol
+import world.euc.protocol.model.BmsPack
+import world.euc.protocol.model.WheelBms
 import world.euc.protocol.inmotion.InmotionCommand
 import world.euc.protocol.inmotion.InmotionFrameType
 import world.euc.protocol.inmotion.InmotionModel
@@ -312,6 +314,24 @@ class WheelConnectionManager(context: Context) {
 
     // ------------------------------------------------------------ demonstração
 
+    /** BMS sintético da demonstração: 2 packs de 20 células levemente desequilibradas. */
+    private fun demoBms(): WheelBms = WheelBms(
+        (1..2).map { pack ->
+            val base = 4055 + pack * 3
+            val cells = List(20) { index -> base + ((index * 7 + pack * 5) % 11) }
+            BmsPack(
+                index = pack,
+                boardId = pack + 1,
+                voltageVolts = cells.sum() / 1000.0,
+                socPercent = 78.5 - pack,
+                maxCellMv = cells.max(),
+                minCellMv = cells.min(),
+                cellsMv = cells,
+                temperaturesCelsius = List(12) { 24.0 + pack + (it % 4) },
+            )
+        },
+    )
+
     /**
      * **Só em builds de debug.** Alimenta a UI com telemetria sintética
      * (velocidade oscilando, corrente, tensão caindo, temperaturas) para
@@ -333,6 +353,7 @@ class WheelConnectionManager(context: Context) {
                 capabilities = InmotionV2Capabilities.forModel(InmotionModel.V11Y),
                 serialNumber = "DEMO-0001",
                 authenticated = true,
+                bms = demoBms(),
                 lastTelemetryAtMillis = System.currentTimeMillis(),
             )
         }
@@ -484,6 +505,7 @@ class WheelConnectionManager(context: Context) {
                 }
             }
             is SessionEvent.AuthenticationCompleted -> _state.update { it.copy(authenticated = event.success) }
+            is SessionEvent.BmsReceived -> _state.update { it.copy(bms = event.bms) }
             is SessionEvent.CommandTimedOut -> Unit // observabilidade futura (log de depuração)
         }
     }

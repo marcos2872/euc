@@ -5,6 +5,7 @@ import world.euc.protocol.alarm.AlarmEvent
 import world.euc.protocol.inmotion.FirmwareVersions
 import world.euc.protocol.inmotion.InmotionModelInfo
 import world.euc.protocol.model.WheelCapabilities
+import world.euc.protocol.model.WheelBms
 import world.euc.protocol.model.WheelSettings
 import world.euc.protocol.model.WheelStatistics
 import world.euc.protocol.model.WheelTelemetry
@@ -22,6 +23,8 @@ data class WheelUiState(
     val local: LocalSettings = LocalSettings(),
     /** Odômetros reportados pela roda (viagem/totais), quando o firmware reporta. */
     val statistics: WheelStatistics = WheelStatistics(),
+    /** BMS: packs, células e temperaturas (rotas `02 24`…`02 27`). */
+    val bms: WheelBms = WheelBms(),
     /** Histórico curto da telemetria, para os gráficos ao vivo do painel. */
     val history: LiveHistory = LiveHistory(),
     /** Distância desde a conexão atual, em km (viagem da sessão). */
