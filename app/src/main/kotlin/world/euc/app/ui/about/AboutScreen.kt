@@ -21,6 +21,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.res.painterResource
+import world.euc.app.R
+import world.euc.app.ui.designsystem.EucSpacing
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -98,6 +103,7 @@ fun AboutScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            BrandHeader()
             SectionCard("Aplicativo") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -181,6 +187,30 @@ fun AboutScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Cabeçalho com a marca: arte do logo + nome do app. */
+@Composable
+private fun BrandHeader() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(EucSpacing.md),
+    ) {
+        Image(
+            painter = painterResource(R.drawable.brand_logo),
+            contentDescription = null,
+            modifier = Modifier.size(72.dp),
+        )
+        Column {
+            Text("EUC", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Painel e passeios para monociclo elétrico",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

@@ -5,4 +5,11 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- Splash (Android 12+ nativo; versões antigas via core-splashscreen). -->
+    <style name="Theme.Euc.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/euc_window_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.Euc</item>
+    </style>
 </resources>
