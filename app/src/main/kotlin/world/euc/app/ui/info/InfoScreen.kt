@@ -101,9 +101,6 @@ fun InfoScreen(
                 BmsSummaryCard(bms)
                 bms.packs.forEach { pack -> BmsPackCard(pack) }
             }
-            state.statistics
-                .takeIf { it.totalKm != null || it.totalHours != null || state.appOdometerKm > 0 }
-                ?.let { OdometersCard(state) }
 
             if (BuildConfig.DEBUG) {
                 EucCard(spacing = EucSpacing.md) {
@@ -170,6 +167,16 @@ private fun WheelIdentityCard(state: WheelUiState) {
                 "%.0f A".format(state.capabilities.maxCurrentAmps),
             )
         }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
+        ) {
+            LabelledValue(
+                if (state.statistics.totalKm != null) "Odômetro (roda)" else "Odômetro (app)",
+                "%.2f km".format(state.statistics.totalKm ?: state.appOdometerKm),
+            )
+            state.statistics.totalHours?.let { LabelledValue("Tempo ligada", "%.0f h".format(it)) }
+        }
         LabelledValue(
             "Autenticação",
             when (state.authenticated) {
@@ -178,24 +185,6 @@ private fun WheelIdentityCard(state: WheelUiState) {
                 null -> "—"
             },
         )
-    }
-}
-
-/** Odômetro total da roda (ou do app) e tempo ligada. */
-@Composable
-private fun OdometersCard(state: WheelUiState) {
-    EucCard(spacing = EucSpacing.md) {
-        Text("Odômetro", style = MaterialTheme.typography.titleMedium)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
-        ) {
-            LabelledValue(
-                if (state.statistics.totalKm != null) "Total (roda)" else "Total (app)",
-                "%.2f km".format(state.statistics.totalKm ?: state.appOdometerKm),
-            )
-            state.statistics.totalHours?.let { LabelledValue("Tempo ligada", "%.0f h".format(it)) }
-        }
     }
 }
 
