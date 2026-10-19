@@ -1,6 +1,5 @@
 package world.euc.app.ui.components
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,22 +8,35 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.compose.cartesian.axis.HorizontalAxis
+import com.patrykandpatrick.vico.compose.cartesian.axis.VerticalAxis
+import com.patrykandpatrick.vico.compose.cartesian.data.CartesianChartModelProducer
+import com.patrykandpatrick.vico.compose.cartesian.data.CartesianValueFormatter
+import com.patrykandpatrick.vico.compose.cartesian.data.lineModel
+import com.patrykandpatrick.vico.compose.cartesian.layer.LineCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.compose.cartesian.rememberVicoScrollState
+import com.patrykandpatrick.vico.compose.common.Fill
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 /** Amostra de um gráfico no tempo. */
 data class ChartSample(val timeMs: Long, val value: Double)
 
 /**
- * Gráfico de linha de uma série no tempo, com faixa preenchida, linhas de
- * referência e os valores mínimos/médio/máximo acima do desenho.
+ * Gráfico de linha da série no tempo (Vico): linha na cor de destaque, área com
+ * gradiente por baixo, eixos com rótulos de hora e de valor, e — quando
+ * [interactive] — arrastar/zoom para explorar passeios longos.
  *
  * Sem pelo menos duas amostras mostra [emptyMessage] no lugar.
  */
@@ -33,19 +45,19 @@ fun TimeSeriesChart(
     samples: List<ChartSample>,
     unit: String,
     modifier: Modifier = Modifier,
-    height: Dp = 140.dp,
+    height: Dp = 160.dp,
+    interactive: Boolean = false,
     emptyMessage: String = "Sem dados.",
 ) {
-    val lineColor = MaterialTheme.colorScheme.primary
-    val gridColor = MaterialTheme.colorScheme.outlineVariant
-    val fillColor = lineColor.copy(alpha = 0.15f)
+    val accent = MaterialTheme.colorScheme.primary
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (samples.size < 2) {
             Text(
                 emptyMessage,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = labelColor,
             )
             return@Column
         }
@@ -62,61 +74,94 @@ fun TimeSeriesChart(
             Text(
                 "mín ${format(minimum)} · méd ${format(average)}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = labelColor,
             )
             Text(
                 "máx ${format(maximum)} $unit",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = labelColor,
             )
         }
 
-        Canvas(
+        val modelProducer = remember { CartesianChartModelProducer() }
+        LaunchedEffect(samples) {
+            modelProducer.runTransaction {
+                lineModel {
+                    series(
+                        x = samples.map { it.timeMs.toDouble() },
+                        y = samples.map { it.value },
+                    )
+                }
+            }
+        }
+
+        val line = remember(accent) {
+            LineCartesianLayer.Line(
+                fill = LineCartesianLayer.LineFill.single(Fill(accent)),
+                stroke = LineCartesianLayer.LineStroke.Continuous(thickness = 2.dp),
+                areaFill = LineCartesianLayer.AreaFill.single(
+                    Fill(
+                        Brush.verticalGradient(
+                            listOf(accent.copy(alpha = 0.45f), accent.copy(alpha = 0f)),
+                        ),
+                    ),
+                ),
+            )
+        }
+        // Janela curta (gráfico ao vivo) precisa de segundos; passeios longos, não.
+        val timePattern = if (samples.last().timeMs - samples.first().timeMs < 10 * 60_000L) {
+            "mm:ss"
+        } else {
+            "HH:mm"
+        }
+        val timeFormatter = remember(timePattern) {
+            CartesianValueFormatter { _, value, _ ->
+                timeLabel(value.toLong(), timePattern)
+            }
+        }
+        val valueFormatter = remember(unit) {
+            CartesianValueFormatter { _, value, _ ->
+                if (unit.isEmpty()) format(value) else "${format(value)} $unit"
+            }
+        }
+        val spanMillis = (samples.last().timeMs - samples.first().timeMs).coerceAtLeast(1L)
+        // O Vico posiciona os rótulos em passos de x (aqui, milissegundos desde
+        // a primeira amostra): ~5 rótulos por janela, deslocados meio passo para
+        // não encostarem nas bordas. Sem o recuo automático do primeiro rótulo,
+        // a linha encosta na borda esquerda do gráfico.
+        val labelStepMillis = remember(spanMillis) { (spanMillis / 5).coerceAtLeast(1_000L).toInt() }
+        val itemPlacer = remember(labelStepMillis) {
+            HorizontalAxis.ItemPlacer.aligned(
+                spacing = { labelStepMillis },
+                offset = { labelStepMillis / 2 },
+                addExtremeLabelPadding = false,
+            )
+        }
+        val scrollState = rememberVicoScrollState(scrollEnabled = interactive)
+
+
+        CartesianChartHost(
+            chart = rememberCartesianChart(
+                rememberLineCartesianLayer(
+                    lineProvider = LineCartesianLayer.LineProvider.series(line),
+                ),
+                startAxis = VerticalAxis.rememberStart(valueFormatter = valueFormatter),
+                bottomAxis = HorizontalAxis.rememberBottom(
+                    valueFormatter = timeFormatter,
+                    itemPlacer = itemPlacer,
+                ),
+            ),
+            modelProducer = modelProducer,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(height),
-        ) {
-            val firstTime = samples.first().timeMs
-            val lastTime = samples.last().timeMs
-            val timeSpan = (lastTime - firstTime).coerceAtLeast(1L).toDouble()
-            val range = (maximum - minimum).takeIf { it > 1e-9 } ?: 1.0
-
-            for (fraction in listOf(0.25f, 0.5f, 0.75f)) {
-                drawLine(
-                    color = gridColor,
-                    start = Offset(0f, size.height * fraction),
-                    end = Offset(size.width, size.height * fraction),
-                    strokeWidth = 1f,
-                )
-            }
-
-            fun yOf(value: Double): Float =
-                (size.height - ((value - minimum) / range * size.height)).toFloat()
-
-            val line = Path()
-            val fill = Path()
-            samples.forEachIndexed { index, sample ->
-                val x = ((sample.timeMs - firstTime) / timeSpan * size.width).toFloat()
-                val y = yOf(sample.value)
-                if (index == 0) {
-                    line.moveTo(x, y)
-                    fill.moveTo(x, size.height)
-                    fill.lineTo(x, y)
-                } else {
-                    line.lineTo(x, y)
-                    fill.lineTo(x, y)
-                }
-            }
-            fill.lineTo(size.width, size.height)
-            fill.close()
-
-            drawPath(
-                path = fill,
-                brush = Brush.verticalGradient(listOf(fillColor, Color.Transparent)),
-            )
-            drawPath(path = line, color = lineColor, style = Stroke(width = 2.dp.toPx()))
-        }
+            scrollState = scrollState,
+        )
     }
 }
+
+/** Rótulo de hora (fuso local) para o eixo horizontal. */
+private fun timeLabel(timeMs: Long, pattern: String): String =
+    SimpleDateFormat(pattern, Locale.getDefault()).format(Date(timeMs))
 
 private fun format(value: Double): String = String.format(Locale.getDefault(), "%.1f", value)

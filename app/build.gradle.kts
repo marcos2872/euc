@@ -62,6 +62,8 @@ dependencies {
     implementation(libs.haze)
     implementation(libs.haze.blur)
     implementation(libs.haze.blur.materials)
+    implementation(libs.vico.compose)
+    implementation(libs.vico.compose.m3)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(kotlin("test-junit5"))

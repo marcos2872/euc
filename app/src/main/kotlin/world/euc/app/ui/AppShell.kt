@@ -193,12 +193,7 @@ fun EucApp(
                 entry<EucRoute.Connect> { ConnectScreen(manager, state) }
 
                 entry<EucRoute.Dashboard> {
-                    DashboardScreen(
-                        manager = manager,
-                        state = state,
-                        onOpenSettings = { openTab(EucRoute.Settings) },
-                        onOpenAlarms = { openTab(EucRoute.Alarms) },
-                    )
+                    DashboardScreen(manager = manager, state = state)
                 }
 
                 entry<EucRoute.Tours> {

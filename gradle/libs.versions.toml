@@ -16,6 +16,7 @@ activityCompose = "1.13.0"
 lifecycle = "2.11.0"
 navigation3 = "1.2.0"
 haze = "2.0.1"
+vico = "3.3.1"
 kotlinxSerialization = "1.11.0"
 
 [libraries]
@@ -41,6 +42,10 @@ navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref =
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
 haze-blur-materials = { module = "dev.chrisbanes.haze:haze-blur-materials", version.ref = "haze" }
+
+# Gráficos (Vico)
+vico-compose = { module = "com.patrykandpatrick.vico:compose", version.ref = "vico" }
+vico-compose-m3 = { module = "com.patrykandpatrick.vico:compose-m3", version.ref = "vico" }
 
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitPlatform" }
 

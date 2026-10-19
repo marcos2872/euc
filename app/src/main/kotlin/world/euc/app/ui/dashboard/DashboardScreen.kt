@@ -18,8 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.LinkOff
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -70,8 +68,6 @@ import kotlin.math.roundToInt
 fun DashboardScreen(
     manager: WheelConnectionManager,
     state: WheelUiState,
-    onOpenSettings: () -> Unit,
-    onOpenAlarms: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
 
@@ -100,12 +96,6 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onOpenAlarms) {
-                        Icon(Icons.Default.Notifications, contentDescription = "Alarmes")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Configurações da roda")
-                    }
                     IconButton(onClick = { manager.disconnect() }) {
                         Icon(Icons.Default.LinkOff, contentDescription = "Desconectar")
                     }

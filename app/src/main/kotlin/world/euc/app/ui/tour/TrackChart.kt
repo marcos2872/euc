@@ -43,6 +43,8 @@ fun TrackChart(
         samples = samples,
         unit = series.unit,
         modifier = modifier,
+        // Passeios podem ter milhares de pontos: permite arrastar e ampliar.
+        interactive = true,
         emptyMessage = "Sem dados de ${series.label.lowercase()} neste passeio.",
     )
 }
