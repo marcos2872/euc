@@ -1,14 +1,19 @@
 package world.euc.app.ui.dashboard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lightbulb
@@ -16,43 +21,49 @@ import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
-import world.euc.app.wheel.ConnectionState
-import world.euc.app.wheel.WheelConnectionManager
+import world.euc.app.ui.components.ActionButton
 import world.euc.app.ui.components.ChartSample
 import world.euc.app.ui.components.ChoiceFlowRow
+import world.euc.app.ui.components.EucCard
 import world.euc.app.ui.components.LabelledValue
+import world.euc.app.ui.components.RingGauge
+import world.euc.app.ui.components.SpeedGauge
 import world.euc.app.ui.components.TimeSeriesChart
 import world.euc.app.ui.components.format
+import world.euc.app.ui.designsystem.EucSpacing
+import world.euc.app.ui.designsystem.EucTheme
+import world.euc.app.wheel.ConnectionState
 import world.euc.app.wheel.LiveHistory
 import world.euc.app.wheel.LiveSeriesKind
+import world.euc.app.wheel.WheelConnectionManager
 import world.euc.app.wheel.WheelUiState
 import world.euc.protocol.model.WheelTelemetry
 import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Painel principal: telemetria ao vivo da roda e ações rápidas.
+ * Painel principal: velocímetro em arco, anéis de bateria/carga/temperatura,
+ * dados da roda, gráficos ao vivo e ações rápidas.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,8 +76,12 @@ fun DashboardScreen(
     val scope = rememberCoroutineScope()
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
                 title = {
                     Column {
                         Text(state.model?.displayName ?: "Roda conectada")
@@ -103,16 +118,17 @@ fun DashboardScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = EucSpacing.screen),
+            verticalArrangement = Arrangement.spacedBy(EucSpacing.md),
         ) {
             state.activeAlarm?.let { alarm ->
-                AlarmBanner(alarm.type.name, alarm.value)
+                AlarmBanner(alarmLabel(alarm.type.name), alarm.value)
             }
-            SpeedCard(state.telemetry)
+
+            SpeedHeroCard(state)
+            RingsCard(state.telemetry)
             DistanceCard(state)
-            BatteryCard(state.telemetry)
-            StatsCard(state.telemetry)
+            TelemetryCard(state.telemetry)
             LiveChartsCard(state.history)
             QuickActionsCard(
                 lightOn = state.local.headlightOn,
@@ -120,19 +136,21 @@ fun DashboardScreen(
                 onToggleLight = { on -> scope.launch { manager.setHeadlight(on) } },
             )
             FreshnessHint(state)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(EucSpacing.sm))
         }
     }
 }
 
+/** Aviso de alarme: cartão em gradiente de erro, com o valor que o disparou. */
 @Composable
-private fun AlarmBanner(typeName: String, value: Double?) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun AlarmBanner(label: String, value: Double?) {
+    EucCard(
+        containerColor = MaterialTheme.colorScheme.errorContainer,
+    ) {
         Text(
-            "⚠ ${alarmLabel(typeName)}${value?.let { " (${it.roundToInt()})" } ?: ""}",
-            modifier = Modifier.padding(12.dp),
+            "⚠  $label${value?.let { " · ${it.roundToInt()}" } ?: ""}",
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.error,
+            color = MaterialTheme.colorScheme.onErrorContainer,
         )
     }
 }
@@ -151,25 +169,108 @@ private fun alarmLabel(typeName: String): String = when (typeName) {
     else -> typeName
 }
 
+/**
+ * Cartão principal: o velocímetro em arco (gradiente ciano → lima, como no
+ * logo), com a marca do limite da roda e os números de apoio.
+ */
 @Composable
-private fun SpeedCard(telemetry: WheelTelemetry) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Velocidade", style = MaterialTheme.typography.labelLarge)
-            Row(verticalAlignment = androidx.compose.ui.Alignment.Bottom) {
-                Text(
-                    telemetry.speedKmh.format(1),
-                    fontSize = 64.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(" km/h", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 12.dp))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                LabelledValue("Limite", telemetry.speedLimitKmh.let { "${it.format(0)} km/h" })
-                LabelledValue("Margem", telemetry.safetyMarginPercent.let { "${it.format(0)} %" })
-            }
+private fun SpeedHeroCard(state: WheelUiState) {
+    val telemetry = state.telemetry
+    val maxKmh = state.capabilities.maxSpeedLimitKmh.takeIf { it > 0 } ?: 60.0
+    val limit = telemetry.speedLimitKmh
+    val ridingMode = state.settings.ridingMode
+
+    EucCard(spacing = EucSpacing.md) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.35f),
+            contentAlignment = Alignment.Center,
+        ) {
+            SpeedGauge(
+                speedKmh = telemetry.speedKmh ?: 0.0,
+                maxKmh = maxKmh,
+                limitKmh = limit,
+                modifier = Modifier.fillMaxSize(),
+                caption = telemetry.safetyMarginPercent?.let { "margem ${it.format(0)}%" },
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
+        ) {
+            LabelledValue(
+                label = "Limite (tiltback)",
+                value = limit.let { "${it.format(0)} km/h" },
+            )
+            LabelledValue(
+                label = "Modo",
+                value = when (ridingMode) {
+                    0 -> "Comfort"
+                    1 -> "Sport"
+                    else -> "—"
+                },
+            )
+            LabelledValue(
+                label = "Margem",
+                value = telemetry.safetyMarginPercent.let { "${it.format(0)} %" },
+            )
         }
     }
+}
+
+/** Anéis compactos: bateria, carga do motor (PWM) e temperatura. */
+@Composable
+private fun RingsCard(telemetry: WheelTelemetry) {
+    val accents = EucTheme.accents
+    val battery = telemetry.batteryPercent
+    val load = telemetry.loadPercent
+    val motorTemperature = telemetry.temperatures?.motor ?: telemetry.temperatures?.board
+
+    EucCard(spacing = EucSpacing.lg) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            RingGauge(
+                fraction = ((battery ?: 0.0) / 100.0).toFloat(),
+                valueText = battery.let { "${it.format(0)}" },
+                caption = "%",
+                label = "Bateria",
+                color = levelColor(battery, ok = 30.0, warn = 15.0) ?: MaterialTheme.colorScheme.primary,
+            )
+            RingGauge(
+                fraction = ((load ?: 0.0) / 100.0).toFloat(),
+                valueText = load.let { "${it.format(0)}" },
+                caption = "%",
+                label = "Carga (PWM)",
+                color = highIsBadColor(load, warn = 70.0, danger = 90.0) ?: accents.ok,
+            )
+            RingGauge(
+                fraction = ((motorTemperature ?: 0.0) / 90.0).toFloat(),
+                valueText = motorTemperature.let { "${it.format(0)}" },
+                caption = "°C",
+                label = "Temperatura",
+                color = highIsBadColor(motorTemperature, warn = 55.0, danger = 70.0) ?: accents.ok,
+            )
+        }
+    }
+}
+
+/** Verde quando o valor é alto (bateria), amarelo/vermelho quando baixo. */
+private fun levelColor(value: Double?, ok: Double, warn: Double): Color? = when {
+    value == null -> null
+    value >= ok -> null
+    value >= warn -> Color(0xFFFBBF24)
+    else -> Color(0xFFFF5A5F)
+}
+
+/** Verde quando o valor é baixo (carga/temperatura), amarelo/vermelho quando alto. */
+private fun highIsBadColor(value: Double?, warn: Double, danger: Double): Color? = when {
+    value == null -> null
+    value < warn -> null
+    value < danger -> Color(0xFFFBBF24)
+    else -> Color(0xFFFF5A5F)
 }
 
 /**
@@ -182,77 +283,54 @@ private fun SpeedCard(telemetry: WheelTelemetry) {
 private fun DistanceCard(state: WheelUiState) {
     val reportedTotal = state.statistics.totalKm
     val total = reportedTotal ?: state.appOdometerKm
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+
+    EucCard(spacing = EucSpacing.md) {
+        Text("Distância", style = MaterialTheme.typography.titleMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                LabelledValue(
-                    "Viagem (sessão)",
-                    String.format(Locale.getDefault(), "%.2f km", state.sessionTripKm),
-                )
-                LabelledValue(
-                    if (reportedTotal != null) "Total (roda)" else "Total (app)",
-                    String.format(Locale.getDefault(), "%.2f km", total),
-                )
-            }
+            LabelledValue(
+                label = "Viagem (sessão)",
+                value = String.format(Locale.getDefault(), "%.2f km", state.sessionTripKm),
+            )
+            LabelledValue(
+                label = if (reportedTotal != null) "Total (roda)" else "Total (app)",
+                value = String.format(Locale.getDefault(), "%.2f km", total),
+            )
             state.statistics.totalHours?.let { hours ->
                 LabelledValue(
-                    "Tempo ligada",
-                    String.format(Locale.getDefault(), "%.0f h", hours),
+                    label = "Tempo ligada",
+                    value = String.format(Locale.getDefault(), "%.0f h", hours),
                 )
             }
         }
     }
 }
 
+/** Dados elétricos e de atitude, em grade compacta. */
 @Composable
-private fun BatteryCard(telemetry: WheelTelemetry) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Bateria", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(6.dp))
-            Text(
-                telemetry.batteryPercent.let { "${it.format(0)} %" },
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(
-                progress = { ((telemetry.batteryPercent ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatsCard(telemetry: WheelTelemetry) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+private fun TelemetryCard(telemetry: WheelTelemetry) {
+    EucCard(spacing = EucSpacing.md) {
+        Text("Roda", style = MaterialTheme.typography.titleMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                LabelledValue("Tensão", telemetry.voltageVolts.let { "${it.format(1)} V" })
-                LabelledValue("Corrente", telemetry.currentAmps.let { "${it.format(1)} A" })
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                LabelledValue("Carga (PWM)", telemetry.loadPercent.let { "${it.format(0)} %" })
-                LabelledValue("Limite de corrente", telemetry.currentLimitAmps.let { "${it.format(0)} A" })
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                LabelledValue("Pitch", telemetry.pitchDegrees.let { "${it.format(1)}°" })
-                LabelledValue("Roll", telemetry.rollDegrees.let { "${it.format(1)}°" })
-            }
-            telemetry.temperatures?.let { temperatures ->
-                Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                    LabelledValue("Motor", temperatures.motor.let { "${it.format(0)}°C" })
-                    LabelledValue("Placa", temperatures.board.let { "${it.format(0)}°C" })
-                    LabelledValue("Bateria", temperatures.battery.let { "${it.format(0)}°C" })
-                }
-            }
+            LabelledValue("Tensão", telemetry.voltageVolts.let { "${it.format(1)} V" })
+            LabelledValue("Corrente", telemetry.currentAmps.let { "${it.format(1)} A" })
+            LabelledValue("Limite de corrente", telemetry.currentLimitAmps.let { "${it.format(0)} A" })
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
+        ) {
+            LabelledValue("Pitch", telemetry.pitchDegrees.let { "${it.format(1)}°" })
+            LabelledValue("Roll", telemetry.rollDegrees.let { "${it.format(1)}°" })
+            LabelledValue(
+                "Temperatura placa",
+                telemetry.temperatures?.board.let { "${it.format(0)} °C" },
+            )
         }
     }
 }
@@ -264,25 +342,21 @@ private fun StatsCard(telemetry: WheelTelemetry) {
 @Composable
 private fun LiveChartsCard(history: LiveHistory) {
     var kind by remember { mutableStateOf(LiveSeriesKind.SPEED) }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("Gráficos ao vivo", style = MaterialTheme.typography.titleMedium)
-            ChoiceFlowRow(
-                label = "Série",
-                options = LiveSeriesKind.entries.map { it to it.label },
-                selected = kind,
-                onSelect = { kind = it },
-            )
-            val series = kind.of(history)
-            TimeSeriesChart(
-                samples = series.samples.map { ChartSample(it.timeMs, it.value) },
-                unit = kind.unit,
-                emptyMessage = "Sem dados de ${kind.label.lowercase()} ainda.",
-            )
-        }
+
+    EucCard(spacing = EucSpacing.sm) {
+        Text("Gráficos ao vivo", style = MaterialTheme.typography.titleMedium)
+        ChoiceFlowRow(
+            label = "Série",
+            options = LiveSeriesKind.entries.map { it to it.label },
+            selected = kind,
+            onSelect = { kind = it },
+        )
+        val series = kind.of(history)
+        TimeSeriesChart(
+            samples = series.samples.map { ChartSample(it.timeMs, it.value) },
+            unit = kind.unit,
+            emptyMessage = "Sem dados de ${kind.label.lowercase()} ainda.",
+        )
     }
 }
 
@@ -292,23 +366,25 @@ private fun QuickActionsCard(
     onHorn: () -> Unit,
     onToggleLight: (Boolean) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    EucCard(spacing = EucSpacing.md) {
+        Text("Ações rápidas", style = MaterialTheme.typography.titleMedium)
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.md),
         ) {
-            Button(onClick = onHorn, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.VolumeUp, contentDescription = null)
-                Spacer(Modifier.padding(4.dp))
-                Text("Buzina")
-            }
-            Button(onClick = { onToggleLight(lightOn != true) }, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Default.Lightbulb, contentDescription = null)
-                Spacer(Modifier.padding(4.dp))
-                Text(if (lightOn == true) "Farol: on" else "Farol: off")
-            }
+            ActionButton(
+                label = "Buzina",
+                icon = { Icon(Icons.Default.VolumeUp, contentDescription = null) },
+                onClick = onHorn,
+                modifier = Modifier.weight(1f),
+            )
+            ActionButton(
+                label = if (lightOn == true) "Farol: ligado" else "Farol: desligado",
+                icon = { Icon(Icons.Default.Lightbulb, contentDescription = null) },
+                onClick = { onToggleLight(lightOn != true) },
+                active = lightOn == true,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -316,20 +392,36 @@ private fun QuickActionsCard(
 @Composable
 private fun FreshnessHint(state: WheelUiState) {
     val ageMillis = System.currentTimeMillis() - state.lastTelemetryAtMillis
+    val stale = state.lastTelemetryAtMillis == 0L || ageMillis > STALE_AFTER_MILLIS
     val message = when {
         state.lastTelemetryAtMillis == 0L -> "Aguardando telemetria..."
         ageMillis > STALE_AFTER_MILLIS -> "Sem dados há ${ageMillis / 1000} s — verifique a conexão"
         else -> "Atualizado há ${ageMillis / 1000} s"
     }
-    Text(
-        message,
-        style = MaterialTheme.typography.bodySmall,
-        color = if (state.lastTelemetryAtMillis == 0L || ageMillis > STALE_AFTER_MILLIS) {
-            MaterialTheme.colorScheme.error
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-    )
+
+    Row(
+        modifier = Modifier.padding(start = EucSpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(EucSpacing.sm),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(
+                    if (stale) MaterialTheme.colorScheme.error else EucTheme.accents.ok,
+                ),
+        )
+        Text(
+            message,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (stale) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
 }
 
 private const val STALE_AFTER_MILLIS = 3_000L

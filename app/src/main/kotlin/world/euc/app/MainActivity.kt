@@ -19,6 +19,9 @@ class MainActivity : ComponentActivity() {
         //   am start -S -n world.euc.app/.MainActivity --es screen tours [--es tour <id>]
         val debugScreen = if (BuildConfig.DEBUG) intent?.getStringExtra("screen") else null
         val debugTourId = if (BuildConfig.DEBUG) intent?.getStringExtra("tour") else null
+        if (BuildConfig.DEBUG && intent?.getBooleanExtra("demo", false) == true) {
+            application.wheelConnectionManager.startDemoTelemetry()
+        }
 
         setContent {
             EucTheme {

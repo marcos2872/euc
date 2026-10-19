@@ -24,13 +24,19 @@ import world.euc.protocol.alarm.AlarmEngine
 import world.euc.protocol.discovery.WheelProtocol
 import world.euc.protocol.inmotion.InmotionCommand
 import world.euc.protocol.inmotion.InmotionFrameType
+import world.euc.protocol.inmotion.InmotionModel
+import world.euc.protocol.inmotion.InmotionModelInfo
 import world.euc.protocol.inmotion.InmotionV2Commands
 import world.euc.protocol.inmotion.InmotionV2Capabilities
 import world.euc.protocol.inmotion.InmotionV2Session
 import world.euc.protocol.inmotion.SessionConfig
 import world.euc.protocol.inmotion.SessionEvent
+import world.euc.protocol.model.RidingMode
 import world.euc.protocol.model.WheelSettings
+import world.euc.protocol.model.WheelStatistics
 import world.euc.protocol.model.WheelTelemetry
+import world.euc.protocol.model.WheelTemperatures
+import kotlin.math.sin
 
 /**
  * Orquestra a conexão com a roda: escaneamento, sessão de protocolo, comandos
@@ -67,6 +73,7 @@ class WheelConnectionManager(context: Context) {
     private var connectionWatchJob: Job? = null
     private var reappliedThisConnection = false
     private var wheelKey: String? = null
+    private var demoJob: Job? = null
 
     /** Escaneia rodas próximas, emitindo cada descoberta. */
     fun scan(timeoutMillis: Long = DEFAULT_SCAN_MILLIS): Flow<DiscoveredWheel> =
@@ -108,6 +115,7 @@ class WheelConnectionManager(context: Context) {
     /** Encerra a sessão e a conexão GATT. */
     fun disconnect() {
         persistOdometer()
+        stopDemoTelemetry()
         eventsJob?.cancel()
         sessionJob?.cancel()
         connectionWatchJob?.cancel()
@@ -278,6 +286,84 @@ class WheelConnectionManager(context: Context) {
     /** Inicia a calibração (giroscópio ou ponto zero dos pedais). */
     suspend fun calibrate(yaw: Boolean) {
         send(InmotionV2Commands.calibration(yaw))
+    }
+
+    // ------------------------------------------------------------ demonstração
+
+    /**
+     * **Só em builds de debug.** Alimenta a UI com telemetria sintética
+     * (velocidade oscilando, corrente, tensão caindo, temperaturas) para
+     * validar painel, gráficos e alarmes sem a roda por perto.
+     *
+     * Ligado por `adb shell am start -S -n world.euc.app/.MainActivity --ez demo true`.
+     */
+    fun startDemoTelemetry() {
+        if (demoJob != null) return
+        _state.update {
+            it.copy(
+                connection = ConnectionState.Connected("V11Y (demonstração)"),
+                model = InmotionModelInfo(
+                    model = InmotionModel.V11,
+                    variant = InmotionModelInfo.V11Y_VARIANT,
+                    batterySeries = 20,
+                    batteryParallel = 2,
+                ),
+                capabilities = InmotionV2Capabilities.forModel(InmotionModel.V11),
+                serialNumber = "DEMO-0001",
+                authenticated = true,
+                lastTelemetryAtMillis = System.currentTimeMillis(),
+            )
+        }
+        demoJob = scope.launch {
+            var tick = 0
+            while (isActive) {
+                val phase = tick / 9.0
+                val speed = (16 + 11 * sin(phase)).coerceAtLeast(0.0)
+                val load = speed / 60.0 * 100 * (0.85 + 0.15 * sin(phase * 2.3))
+                onSessionEvent(
+                    SessionEvent.TelemetryReceived(
+                        WheelTelemetry(
+                            speedKmh = speed,
+                            currentAmps = 7.5 + 6 * sin(phase * 1.7) + speed / 14,
+                            voltageVolts = 80.4 - speed / 22 - 0.3 * sin(phase / 3),
+                            loadPercent = load,
+                            safetyMarginPercent = (100 - load).coerceIn(0.0, 100.0),
+                            pitchDegrees = 1.8 * sin(phase * 2),
+                            rollDegrees = 4.0 * sin(phase * 0.7),
+                            batteryPercent = 82.0 - tick * 0.02,
+                            speedLimitKmh = 45.0,
+                            currentLimitAmps = 58.0,
+                            temperatures = WheelTemperatures(
+                                mosfet = 38 + 6 * sin(phase / 2),
+                                motor = 44 + 8 * sin(phase / 3),
+                                battery = 31.0,
+                                board = 36.0,
+                            ),
+                            ridingMode = RidingMode.DRIVE,
+                        ),
+                    ),
+                )
+                if (tick % 10 == 0) {
+                    onSessionEvent(
+                        SessionEvent.StatisticsReceived(
+                            WheelStatistics(
+                                tripKm = 12.4 + tick * 0.02,
+                                totalKm = 516.06,
+                                totalHours = 921.9,
+                            ),
+                        ),
+                    )
+                }
+                tick++
+                delay(500)
+            }
+        }
+    }
+
+    /** Encerra a telemetria de demonstração. */
+    fun stopDemoTelemetry() {
+        demoJob?.cancel()
+        demoJob = null
     }
 
     // ------------------------------------------------------------ internos
