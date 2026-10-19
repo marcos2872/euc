@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -105,6 +106,9 @@ fun TrackMap(
         Canvas(
             modifier = Modifier
                 .matchParentSize()
+                // Sem isto, os tiles desenhados fora do quadro "vazam" por cima
+                // dos elementos vizinhos (ex.: os botões do cartão de gravação).
+                .clipToBounds()
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .onSizeChanged { viewport = it }
                 .pointerInput(Unit) {
