@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import world.euc.app.ui.designsystem.EucMotion
 import world.euc.app.ui.designsystem.EucTheme
 import kotlin.math.PI
+import kotlin.math.min
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -61,9 +62,16 @@ fun SpeedGauge(
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = 16.dp.toPx()
-            val inset = stroke / 2 + 8.dp.toPx()
-            val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
-            val topLeft = Offset(inset, inset)
+            // O arco é sempre circular: usa o menor lado e centraliza, então o
+            // medidor não "achata" quando o cartão é mais largo que alto.
+            val diameter = min(size.width, size.height) - stroke - 16.dp.toPx()
+            val inset = Offset(
+                (size.width - diameter) / 2f,
+                (size.height - diameter) / 2f,
+            )
+            val arcSize = Size(diameter, diameter)
+            val topLeft = inset
+            val center = Offset(size.width / 2, size.height / 2)
             val gradient = Brush.linearGradient(
                 colors = accents.gaugeGradient,
                 start = Offset(0f, size.height),
@@ -87,8 +95,7 @@ fun SpeedGauge(
                 val angle = Math.toRadians(
                     (GAUGE_START_ANGLE + GAUGE_SWEEP_ANGLE * index / steps).toDouble(),
                 )
-                val center = Offset(size.width / 2, size.height / 2)
-                val outer = arcSize.width / 2 + stroke / 2
+                val outer = diameter / 2 + stroke / 2
                 val inner = outer - if (index % 2 == 0) 9.dp.toPx() else 5.dp.toPx()
                 drawLine(
                     color = tickColor,
@@ -130,7 +137,7 @@ fun SpeedGauge(
                 val limitFraction = (limit / maxKmh).toFloat().coerceIn(0f, 1f)
                 drawLimitMarker(
                     angleDegrees = GAUGE_START_ANGLE + GAUGE_SWEEP_ANGLE * limitFraction,
-                    radius = arcSize.width / 2 + stroke / 2,
+                    radius = diameter / 2 + stroke / 2,
                     color = limitColor,
                 )
             }

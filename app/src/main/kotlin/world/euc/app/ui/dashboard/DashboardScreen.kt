@@ -174,7 +174,9 @@ private fun SpeedHeroCard(state: WheelUiState) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1.35f),
+                // Altura suficiente para o arco (240°) respirar sem sobrar
+                // espaço vazio — o arco em si é sempre circular (ver SpeedGauge).
+                .aspectRatio(1.25f),
             contentAlignment = Alignment.Center,
         ) {
             SpeedGauge(
