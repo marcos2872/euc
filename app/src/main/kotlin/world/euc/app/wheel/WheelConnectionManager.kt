@@ -19,6 +19,7 @@ import world.euc.ble.BleWheelConnector
 import world.euc.ble.DiscoveredWheel
 import world.euc.app.alarm.AlarmConfigStore
 import world.euc.app.alarm.AlarmNotifier
+import world.euc.app.debug.ProtocolProbe
 import world.euc.protocol.alarm.AlarmConfig
 import world.euc.protocol.alarm.AlarmEngine
 import world.euc.protocol.alarm.AlarmLimits
@@ -288,6 +289,25 @@ class WheelConnectionManager(context: Context) {
     /** Inicia a calibração (giroscópio ou ponto zero dos pedais). */
     suspend fun calibrate(yaw: Boolean) {
         send(InmotionV2Commands.calibration(yaw))
+    }
+
+    // ------------------------------------------------------------ sonda (debug)
+
+    /**
+     * **Só em builds de debug.** Envia os quadros candidatos de [probe], um a
+     * um, deixando pedido e resposta no logcat (tag `EucSession`).
+     *
+     * Serve para descobrir os bytes que faltam no protocolo (BMS por célula,
+     * identificação, mute) sem depender do app oficial — plano de captura em
+     * `docs/09-pendencias-inmotion.md` §4.1.
+     */
+    suspend fun probe(probe: ProtocolProbe) {
+        val active = session ?: return
+        probe.commands.forEachIndexed { index, command ->
+            Log.d(LOG_TAG, "sonda ${probe.label} #${index + 1}/${probe.commands.size}: $command")
+            active.poll(command)
+            delay(PROBE_SETTLE_MILLIS)
+        }
     }
 
     // ------------------------------------------------------------ demonstração
@@ -603,5 +623,8 @@ class WheelConnectionManager(context: Context) {
         const val LOG_TAG = "EucSession"
         const val DEFAULT_SCAN_MILLIS = 15_000L
         const val ALARM_BANNER_MILLIS = 6_000L
+
+        /** Pausa entre os quadros da sonda de debug, para atribuir as respostas. */
+        const val PROBE_SETTLE_MILLIS = 700L
     }
 }
