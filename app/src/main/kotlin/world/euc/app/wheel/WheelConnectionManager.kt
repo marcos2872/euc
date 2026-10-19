@@ -21,6 +21,8 @@ import world.euc.app.alarm.AlarmConfigStore
 import world.euc.app.alarm.AlarmNotifier
 import world.euc.protocol.alarm.AlarmConfig
 import world.euc.protocol.alarm.AlarmEngine
+import world.euc.protocol.alarm.AlarmLimits
+import world.euc.protocol.alarm.clampedTo
 import world.euc.protocol.discovery.WheelProtocol
 import world.euc.protocol.inmotion.InmotionCommand
 import world.euc.protocol.inmotion.InmotionFrameType
@@ -303,12 +305,12 @@ class WheelConnectionManager(context: Context) {
             it.copy(
                 connection = ConnectionState.Connected("V11Y (demonstração)"),
                 model = InmotionModelInfo(
-                    model = InmotionModel.V11,
+                    model = InmotionModel.V11Y,
                     variant = InmotionModelInfo.V11Y_VARIANT,
                     batterySeries = 20,
                     batteryParallel = 2,
                 ),
-                capabilities = InmotionV2Capabilities.forModel(InmotionModel.V11),
+                capabilities = InmotionV2Capabilities.forModel(InmotionModel.V11Y),
                 serialNumber = "DEMO-0001",
                 authenticated = true,
                 lastTelemetryAtMillis = System.currentTimeMillis(),
@@ -419,13 +421,24 @@ class WheelConnectionManager(context: Context) {
                         history = it.history.plus(event.telemetry, now),
                     )
                 }
+                // A roda reporta o próprio limite de corrente: se for menor que o
+                // presumido pelo modelo, o teto dos alarmes desce junto.
+                event.telemetry.currentLimitAmps?.let { reported ->
+                    if (_state.value.alarmConfig.currentAlarmAmps > reported) {
+                        applyAlarmLimits(AlarmLimits.Unknown.copy(maxCurrentAmps = reported))
+                    }
+                }
                 evaluateAlarms(event.telemetry)
             }
-            is SessionEvent.ModelIdentified -> _state.update {
-                it.copy(
-                    model = event.model,
-                    capabilities = InmotionV2Capabilities.forModel(event.model.model),
-                )
+            is SessionEvent.ModelIdentified -> {
+                val capabilities = InmotionV2Capabilities.forModel(event.model.model)
+                applyAlarmLimits(AlarmLimits.of(capabilities, event.model.batterySeries))
+                _state.update {
+                    it.copy(
+                        model = event.model,
+                        capabilities = capabilities,
+                    )
+                }
             }
             is SessionEvent.SerialNumberReceived -> {
                 wheelKey = event.serialNumber
@@ -531,6 +544,18 @@ class WheelConnectionManager(context: Context) {
         alarmConfig = config
         alarmConfigStore.save(config)
         _state.update { it.copy(alarmConfig = config) }
+    }
+
+    /**
+     * Trava os alarmes no envelope da roda: nada acima do que ela suporta.
+     * Só persiste quando algo realmente mudou.
+     */
+    private fun applyAlarmLimits(limits: AlarmLimits) {
+        val clamped = _state.value.alarmConfig.clampedTo(limits)
+        if (clamped == _state.value.alarmConfig) return
+        alarmConfig = clamped
+        alarmConfigStore.save(clamped)
+        _state.update { it.copy(alarmConfig = clamped) }
     }
 
     private fun evaluateAlarms(telemetry: WheelTelemetry) {

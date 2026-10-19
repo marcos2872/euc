@@ -42,11 +42,17 @@ data class WheelCapabilities(
      * **ignora silenciosamente** esses comandos no framing padrão.
      */
     val requiresExtendedFraming: Boolean = false,
+    /** Corrente de pico que o modelo suporta, em A (teto dos alarmes). */
+    val maxCurrentAmps: Double = DEFAULT_MAX_CURRENT,
+    /** Temperatura máxima segura para alarme, em °C. */
+    val maxTemperatureCelsius: Double = DEFAULT_MAX_TEMPERATURE,
 ) {
     operator fun contains(setting: WheelSettingId): Boolean = setting in settings
 
     companion object {
         const val DEFAULT_MIN_SPEED_LIMIT = 5.0
         const val DEFAULT_MAX_SPEED_LIMIT = 50.0
+        const val DEFAULT_MAX_CURRENT = 60.0
+        const val DEFAULT_MAX_TEMPERATURE = 80.0
     }
 }

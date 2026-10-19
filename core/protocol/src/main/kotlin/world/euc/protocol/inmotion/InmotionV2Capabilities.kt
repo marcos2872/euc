@@ -116,9 +116,25 @@ object InmotionV2Capabilities {
         else -> true
     }
 
+    /**
+     * Corrente de pico que o modelo suporta (teto dos alarmes). Valores
+     * conservadores — a roda reporta o limite real na telemetria, que o app usa
+     * quando for menor.
+     */
+    private fun maxCurrentFor(model: InmotionModel?): Double = when (model) {
+        InmotionModel.V11Y, InmotionModel.V11 -> 58.0
+        InmotionModel.V12 -> 60.0
+        InmotionModel.V12S -> 50.0
+        InmotionModel.V13, InmotionModel.V14 -> 100.0
+        InmotionModel.V9 -> 30.0
+        InmotionModel.E20, InmotionModel.P6 -> 30.0
+        InmotionModel.UNKNOWN, null -> WheelCapabilities.DEFAULT_MAX_CURRENT
+    }
+
     /** Capacidades do modelo; sem modelo detectado assume o conjunto da V11y. */
     fun forModel(model: InmotionModel?): WheelCapabilities = WheelCapabilities(
         maxSpeedLimitKmh = maxSpeedFor(model),
+        maxCurrentAmps = maxCurrentFor(model),
         requiresExtendedFraming = usesExtendedFraming(model),
         settings = when (model) {
             InmotionModel.V11 -> V11

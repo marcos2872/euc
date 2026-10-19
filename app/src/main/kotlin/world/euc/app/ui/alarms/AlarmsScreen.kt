@@ -32,11 +32,13 @@ import androidx.compose.ui.unit.dp
 import world.euc.app.ui.components.SectionCard
 import world.euc.app.ui.components.SliderRow
 import world.euc.app.ui.components.SwitchRow
+import world.euc.app.ui.components.format
 import world.euc.app.ui.components.formatValue
 import world.euc.app.ui.designsystem.EucSpacing
 import world.euc.app.wheel.WheelConnectionManager
 import world.euc.app.wheel.WheelUiState
 import world.euc.protocol.alarm.AlarmConfig
+import world.euc.protocol.alarm.AlarmLimits
 import world.euc.protocol.alarm.AlarmType
 
 /**
@@ -52,6 +54,7 @@ fun AlarmsScreen(
     onBack: () -> Unit,
 ) {
     val config = state.alarmConfig
+    val limits = alarmLimits(state)
 
     fun update(updated: AlarmConfig) = manager.updateAlarmConfig(updated)
     fun setEnabled(type: AlarmType, enabled: Boolean) =
@@ -102,12 +105,13 @@ fun AlarmsScreen(
             }
 
             SectionCard("Velocidade") {
+                LimitsHint("Teto do modelo: ${limits.maxSpeedKmh.format(0)} km/h")
                 AlarmLevel(
                     label = "Nível 1 (baixa prioridade)",
                     enabled = config.isEnabled(AlarmType.SPEED_1),
                     onEnabledChange = { setEnabled(AlarmType.SPEED_1, it) },
                     value = config.speedAlarm1Kmh.toFloat(),
-                    valueRange = 5f..60f,
+                    valueRange = 5f..limits.maxSpeedKmh.toFloat(),
                     unit = " km/h",
                     onCommit = { update(config.copy(speedAlarm1Kmh = it.toDouble())) },
                 )
@@ -116,7 +120,7 @@ fun AlarmsScreen(
                     enabled = config.isEnabled(AlarmType.SPEED_2),
                     onEnabledChange = { setEnabled(AlarmType.SPEED_2, it) },
                     value = config.speedAlarm2Kmh.toFloat(),
-                    valueRange = 5f..70f,
+                    valueRange = 5f..limits.maxSpeedKmh.toFloat(),
                     unit = " km/h",
                     onCommit = { update(config.copy(speedAlarm2Kmh = it.toDouble())) },
                 )
@@ -125,7 +129,7 @@ fun AlarmsScreen(
                     enabled = config.isEnabled(AlarmType.SPEED_3),
                     onEnabledChange = { setEnabled(AlarmType.SPEED_3, it) },
                     value = config.speedAlarm3Kmh.toFloat(),
-                    valueRange = 5f..80f,
+                    valueRange = 5f..limits.maxSpeedKmh.toFloat(),
                     unit = " km/h",
                     onCommit = { update(config.copy(speedAlarm3Kmh = it.toDouble())) },
                 )
@@ -157,6 +161,7 @@ fun AlarmsScreen(
             }
 
             SectionCard("Bateria e energia") {
+                LimitsHint("Corrente de pico do modelo: ${limits.maxCurrentAmps.format(0)} A")
                 AlarmLevel(
                     label = "Bateria baixa",
                     enabled = config.isEnabled(AlarmType.BATTERY),
@@ -183,23 +188,34 @@ fun AlarmsScreen(
                             config
                                 .withTypeEnabled(AlarmType.CURRENT, enabled)
                                 // Ao ligar sem valor definido, assume um limite sensato.
-                                .let { if (enabled && it.currentAlarmAmps <= 0) it.copy(currentAlarmAmps = 40.0) else it },
+                                .let {
+                                    if (enabled && it.currentAlarmAmps <= 0) {
+                                        it.copy(currentAlarmAmps = minOf(40.0, limits.maxCurrentAmps))
+                                    } else {
+                                        it
+                                    }
+                                },
                         )
                     },
                     value = config.currentAlarmAmps.toFloat(),
-                    valueRange = 0f..120f,
+                    valueRange = 0f..limits.maxCurrentAmps.toFloat(),
                     unit = " A",
                     onCommit = { update(config.copy(currentAlarmAmps = it.toDouble())) },
                 )
             }
 
             SectionCard("Temperatura e tensão") {
+                LimitsHint(
+                    "Bateria: ${limits.minVoltageVolts.format(0)}–" +
+                        "${(limits.maxVoltageVolts - AlarmLimits.OVERVOLTAGE_HEADROOM_VOLTS).format(0)} V · " +
+                        "até ${limits.maxTemperatureCelsius.format(0)} °C",
+                )
                 AlarmLevel(
                     label = "Temperatura máxima",
                     enabled = config.isEnabled(AlarmType.TEMPERATURE),
                     onEnabledChange = { setEnabled(AlarmType.TEMPERATURE, it) },
                     value = config.temperatureAlarmCelsius.toFloat(),
-                    valueRange = 30f..100f,
+                    valueRange = 30f..limits.maxTemperatureCelsius.toFloat(),
                     unit = " °C",
                     onCommit = { update(config.copy(temperatureAlarmCelsius = it.toDouble())) },
                 )
@@ -210,11 +226,20 @@ fun AlarmsScreen(
                         update(
                             config
                                 .withTypeEnabled(AlarmType.OVERVOLTAGE, enabled)
-                                .let { if (enabled && it.overvoltageVolts <= 0) it.copy(overvoltageVolts = 84.0) else it },
+                                .let {
+                                    if (enabled && it.overvoltageVolts <= 0) {
+                                        it.copy(
+                                            overvoltageVolts = limits.maxVoltageVolts -
+                                                AlarmLimits.OVERVOLTAGE_HEADROOM_VOLTS + 2.0,
+                                        )
+                                    } else {
+                                        it
+                                    }
+                                },
                         )
                     },
                     value = config.overvoltageVolts.toFloat(),
-                    valueRange = 0f..130f,
+                    valueRange = 0f..limits.maxVoltageVolts.toFloat(),
                     unit = " V",
                     onCommit = { update(config.copy(overvoltageVolts = it.toDouble())) },
                 )
@@ -225,17 +250,50 @@ fun AlarmsScreen(
                         update(
                             config
                                 .withTypeEnabled(AlarmType.UNDERVOLTAGE, enabled)
-                                .let { if (enabled && it.undervoltageVolts <= 0) it.copy(undervoltageVolts = 60.0) else it },
+                                .let {
+                                    if (enabled && it.undervoltageVolts <= 0) {
+                                        it.copy(undervoltageVolts = limits.minVoltageVolts + 6.0)
+                                    } else {
+                                        it
+                                    }
+                                },
                         )
                     },
                     value = config.undervoltageVolts.toFloat(),
-                    valueRange = 0f..120f,
+                    valueRange = 0f..limits.maxVoltageVolts.toFloat(),
                     unit = " V",
                     onCommit = { update(config.copy(undervoltageVolts = it.toDouble())) },
                 )
             }
         }
     }
+}
+
+/**
+ * Envelope da roda conectada: teto de velocidade/corrente/temperatura e faixa de
+ * tensão da bateria (pela série de células que a roda reporta). Sem roda
+ * conhecida, usa uma faixa ampla para não travar nada.
+ */
+private fun alarmLimits(state: WheelUiState): AlarmLimits {
+    val base = state.model
+        ?.let { AlarmLimits.of(state.capabilities, it.batterySeries) }
+        ?: AlarmLimits.Unknown
+    val reportedCurrent = state.telemetry.currentLimitAmps
+    return if (reportedCurrent != null && reportedCurrent < base.maxCurrentAmps) {
+        base.copy(maxCurrentAmps = reportedCurrent)
+    } else {
+        base
+    }
+}
+
+/** Mostra qual envelope da roda está servindo de teto para os alarmes. */
+@Composable
+private fun LimitsHint(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /**
