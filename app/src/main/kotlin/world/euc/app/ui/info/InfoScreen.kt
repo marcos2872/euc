@@ -1,14 +1,19 @@
 package world.euc.app.ui.info
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -90,8 +96,9 @@ fun InfoScreen(
 
             state.model?.let { WheelIdentityCard(state) }
             state.bms.takeIf { !it.isEmpty }?.let { BmsCard(it) }
-            state.statistics.takeIf { !it.isEmpty || state.sessionTripKm > 0 }?.let { OdometersCard(state) }
-            state.model?.let { TelemetrySnapshotCard(state) }
+            state.statistics
+                .takeIf { it.totalKm != null || it.totalHours != null || state.appOdometerKm > 0 }
+                ?.let { OdometersCard(state) }
 
             if (BuildConfig.DEBUG) {
                 EucCard(spacing = EucSpacing.md) {
@@ -169,56 +176,21 @@ private fun WheelIdentityCard(state: WheelUiState) {
     }
 }
 
-/** Odômetros da roda e da sessão. */
+/** Odômetro total da roda (ou do app) e tempo ligada. */
 @Composable
 private fun OdometersCard(state: WheelUiState) {
     EucCard(spacing = EucSpacing.md) {
-        Text("Odômetros", style = MaterialTheme.typography.titleMedium)
+        Text("Odômetro", style = MaterialTheme.typography.titleMedium)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
         ) {
-            LabelledValue("Viagem (sessão)", "%.2f km".format(state.sessionTripKm))
-            state.statistics.tripKm?.let { LabelledValue("Viagem (roda)", "%.2f km".format(it)) }
             LabelledValue(
                 if (state.statistics.totalKm != null) "Total (roda)" else "Total (app)",
                 "%.2f km".format(state.statistics.totalKm ?: state.appOdometerKm),
             )
+            state.statistics.totalHours?.let { LabelledValue("Tempo ligada", "%.0f h".format(it)) }
         }
-        state.statistics.totalHours?.let { LabelledValue("Tempo ligada", "%.0f h".format(it)) }
-    }
-}
-
-/** Retrato da telemetria no momento (tensão, corrente, limites e temperaturas). */
-@Composable
-private fun TelemetrySnapshotCard(state: WheelUiState) {
-    val telemetry = state.telemetry
-
-    EucCard(spacing = EucSpacing.md) {
-        Text("Telemetria", style = MaterialTheme.typography.titleMedium)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
-        ) {
-            LabelledValue("Tensão", telemetry.voltageVolts?.let { "%.1f V".format(it) } ?: "—")
-            LabelledValue("Corrente", telemetry.currentAmps?.let { "%.1f A".format(it) } ?: "—")
-            LabelledValue("Carga (PWM)", telemetry.loadPercent?.let { "%.0f %%".format(it) } ?: "—")
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
-        ) {
-            LabelledValue("Limite de velocidade", telemetry.speedLimitKmh?.let { "%.0f km/h".format(it) } ?: "—")
-            LabelledValue("Limite de corrente", telemetry.currentLimitAmps?.let { "%.0f A".format(it) } ?: "—")
-        }
-        LabelledValue(
-            "Temperaturas (MOS / motor / bateria)",
-            telemetry.temperatures?.let {
-                listOfNotNull(it.mosfet, it.motor, it.battery).takeIf { temps -> temps.isNotEmpty() }
-                    ?.joinToString(" / ") { temp -> "%.0f".format(temp) }
-                    ?.plus(" °C")
-            } ?: "—",
-        )
     }
 }
 
@@ -263,6 +235,8 @@ private fun BmsCard(bms: WheelBms) {
                 }
                 if (pack.cellsMv.isNotEmpty()) {
                     val average = pack.cellsMv.average()
+                    val lowest = pack.cellsMv.min()
+                    val highest = pack.cellsMv.max()
                     Text(
                         "Células (mV)",
                         style = MaterialTheme.typography.labelSmall,
@@ -271,14 +245,15 @@ private fun BmsCard(bms: WheelBms) {
                     pack.cellsMv.chunked(CELLS_PER_ROW).forEach { row ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(EucSpacing.sm),
+                            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xs),
                         ) {
                             row.forEach { millivolts ->
-                                Text(
-                                    millivolts.toString(),
+                                CellChip(
+                                    millivolts = millivolts,
+                                    lowest = lowest,
+                                    highest = highest,
+                                    deviationMv = abs(millivolts - average).roundToInt(),
                                     modifier = Modifier.weight(1f),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = cellColor(abs(millivolts - average).roundToInt()),
                                 )
                             }
                         }
@@ -303,6 +278,56 @@ private fun cellColor(deltaMv: Int): Color = when {
     deltaMv <= 10 -> MaterialTheme.colorScheme.primary
     deltaMv <= 30 -> MaterialTheme.colorScheme.tertiary
     else -> MaterialTheme.colorScheme.error
+}
+
+/**
+ * Mini card de uma célula: o valor em mV e um filete de carga proporcional à
+ * tensão dentro do pack — um "desenho" das células, com a cor pelo desequilíbrio.
+ */
+@Composable
+private fun CellChip(
+    millivolts: Int,
+    lowest: Int,
+    highest: Int,
+    deviationMv: Int,
+    modifier: Modifier = Modifier,
+) {
+    val span = (highest - lowest).coerceAtLeast(1)
+    val level = (millivolts - lowest).toFloat() / span
+    val accent = cellColor(deviationMv)
+
+    Column(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.small)
+            .padding(horizontal = EucSpacing.xs, vertical = EucSpacing.xs),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(EucSpacing.xs),
+    ) {
+        Text(
+            text = millivolts.toString(),
+            style = MaterialTheme.typography.bodySmall,
+            color = accent,
+            maxLines = 1,
+            softWrap = false,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.25f + 0.75f * level)
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(accent),
+            )
+        }
+    }
 }
 
 private const val CELLS_PER_ROW = 5

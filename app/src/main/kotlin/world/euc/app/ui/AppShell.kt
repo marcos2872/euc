@@ -102,8 +102,8 @@ private val ConnectedTabs = listOf(
     ShellTab(EucRoute.Dashboard, "Painel", Icons.Default.Speed),
     ShellTab(EucRoute.Tours, "Passeios", Icons.Default.Timeline),
     ShellTab(EucRoute.Alarms, "Alarmes", Icons.Default.Notifications),
-    ShellTab(EucRoute.Info, "Info", Icons.Default.Info),
     ShellTab(EucRoute.Settings, "Ajustes", Icons.Default.Settings),
+    ShellTab(EucRoute.Info, "Info", Icons.Default.Info),
 )
 
 private val DisconnectedTabs = listOf(
@@ -290,6 +290,9 @@ private fun EucBottomBar(
                 EucTabItem(
                     tab = tab,
                     selected = tab.route == current,
+                    // Largura igual para todos: o destaque de seleção fica do
+                    // mesmo tamanho em qualquer aba (o texto varia de tamanho).
+                    modifier = Modifier.weight(1f),
                     onClick = { onSelect(tab.route) },
                 )
             }
@@ -298,7 +301,12 @@ private fun EucBottomBar(
 }
 
 @Composable
-private fun EucTabItem(tab: ShellTab, selected: Boolean, onClick: () -> Unit) {
+private fun EucTabItem(
+    tab: ShellTab,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val interaction = remember { MutableInteractionSource() }
     val contentColor = if (selected) {
         MaterialTheme.colorScheme.onSecondaryContainer
@@ -307,7 +315,7 @@ private fun EucTabItem(tab: ShellTab, selected: Boolean, onClick: () -> Unit) {
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .clip(PillShape)
             .background(
                 if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
@@ -319,7 +327,7 @@ private fun EucTabItem(tab: ShellTab, selected: Boolean, onClick: () -> Unit) {
                 role = Role.Tab,
                 onClick = onClick,
             )
-            .padding(horizontal = EucSpacing.md, vertical = EucSpacing.sm),
+            .padding(horizontal = EucSpacing.xs, vertical = EucSpacing.sm),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(EucSpacing.xs),
     ) {
@@ -333,6 +341,8 @@ private fun EucTabItem(tab: ShellTab, selected: Boolean, onClick: () -> Unit) {
             text = tab.label,
             style = MaterialTheme.typography.labelMedium,
             color = contentColor,
+            maxLines = 1,
+            softWrap = false,
         )
     }
 }
