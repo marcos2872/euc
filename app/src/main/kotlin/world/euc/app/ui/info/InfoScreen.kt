@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -40,6 +41,7 @@ import world.euc.app.ui.components.LabelledValue
 import world.euc.app.ui.designsystem.EucSpacing
 import world.euc.app.wheel.WheelConnectionManager
 import world.euc.app.wheel.WheelUiState
+import world.euc.protocol.model.BmsPack
 import world.euc.protocol.model.WheelBms
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -95,7 +97,10 @@ fun InfoScreen(
             }
 
             state.model?.let { WheelIdentityCard(state) }
-            state.bms.takeIf { !it.isEmpty }?.let { BmsCard(it) }
+            state.bms.takeIf { !it.isEmpty }?.let { bms ->
+                BmsSummaryCard(bms)
+                bms.packs.forEach { pack -> BmsPackCard(pack) }
+            }
             state.statistics
                 .takeIf { it.totalKm != null || it.totalHours != null || state.appOdometerKm > 0 }
                 ?.let { OdometersCard(state) }
@@ -194,13 +199,10 @@ private fun OdometersCard(state: WheelUiState) {
     }
 }
 
-/**
- * BMS em detalhe: um bloco por pack com carga, tensão, desequilíbrio, as
- * **tensões de célula em mV** e as temperaturas.
- */
+/** Resumo do BMS: desequilíbrio geral, menor célula e quantos packs. */
 @Composable
-private fun BmsCard(bms: WheelBms) {
-    EucCard(spacing = EucSpacing.md) {
+private fun BmsSummaryCard(bms: WheelBms) {
+    EucCard(spacing = EucSpacing.sm) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Bateria (BMS)", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.weight(1f))
@@ -212,64 +214,115 @@ private fun BmsCard(bms: WheelBms) {
                 )
             }
         }
-        bms.lowestCellMv?.let {
-            Text(
-                "Menor célula: $it mV",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
+        ) {
+            LabelledValue("Packs", bms.packs.size.toString())
+            bms.lowestCellMv?.let { LabelledValue("Menor célula", "$it mV") }
+            bms.averageSocPercent?.let { LabelledValue("Carga média", "${it.roundToInt()} %") }
         }
-        bms.packs.forEach { pack ->
-            Column(verticalArrangement = Arrangement.spacedBy(EucSpacing.xs)) {
-                Text(
-                    "Pack ${pack.index}" + (pack.boardId?.let { " (board $it)" } ?: ""),
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
-                ) {
-                    LabelledValue("Carga", pack.socPercent?.let { "${it.roundToInt()} %" } ?: "—")
-                    LabelledValue("Tensão", pack.voltageVolts?.let { "%.2f V".format(it) } ?: "—")
-                    LabelledValue("Δ células", pack.cellDeltaMv?.let { "$it mV" } ?: "—")
-                }
-                if (pack.cellsMv.isNotEmpty()) {
-                    val average = pack.cellsMv.average()
-                    val lowest = pack.cellsMv.min()
-                    val highest = pack.cellsMv.max()
+    }
+}
+
+/**
+ * Um card por pack: selo numerado, board, carga/tensão/desequilíbrio, as
+ * **tensões de célula** (mini cards) e as temperaturas.
+ */
+@Composable
+private fun BmsPackCard(pack: BmsPack) {
+    EucCard(spacing = EucSpacing.md) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.sm),
+        ) {
+            PackBadge(pack.index)
+            Column {
+                Text("Pack ${pack.index}", style = MaterialTheme.typography.titleMedium)
+                pack.boardId?.let { board ->
                     Text(
-                        "Células (mV)",
+                        "board $board",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    pack.cellsMv.chunked(CELLS_PER_ROW).forEach { row ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xs),
-                        ) {
-                            row.forEach { millivolts ->
-                                CellChip(
-                                    millivolts = millivolts,
-                                    lowest = lowest,
-                                    highest = highest,
-                                    deviationMv = abs(millivolts - average).roundToInt(),
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-                    }
-                }
-                if (pack.temperaturesCelsius.isNotEmpty()) {
-                    Text(
-                        "Temperaturas ${pack.temperaturesCelsius.min().roundToInt()}–" +
-                            "${pack.temperaturesCelsius.max().roundToInt()} °C",
-                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
+            Spacer(Modifier.weight(1f))
+            pack.cellDeltaMv?.let { delta ->
+                Text(
+                    "Δ $delta mV",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = cellColor(delta),
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EucSpacing.xl),
+        ) {
+            LabelledValue("Carga", pack.socPercent?.let { "${it.roundToInt()} %" } ?: "—")
+            LabelledValue("Tensão", pack.voltageVolts?.let { "%.2f V".format(it) } ?: "—")
+            LabelledValue("Máx / mín", pack.maxMinLabel())
+        }
+        if (pack.cellsMv.isNotEmpty()) {
+            val average = pack.cellsMv.average()
+            val lowest = pack.cellsMv.min()
+            val highest = pack.cellsMv.max()
+            Text(
+                "Células (mV)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            pack.cellsMv.chunked(CELLS_PER_ROW).forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(EucSpacing.xs),
+                ) {
+                    row.forEach { millivolts ->
+                        CellChip(
+                            millivolts = millivolts,
+                            lowest = lowest,
+                            highest = highest,
+                            deviationMv = abs(millivolts - average).roundToInt(),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
+        if (pack.temperaturesCelsius.isNotEmpty()) {
+            Text(
+                "Temperaturas ${pack.temperaturesCelsius.min().roundToInt()}–" +
+                    "${pack.temperaturesCelsius.max().roundToInt()} °C",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
+}
+
+/** Selo redondo com o número do pack — identifica o card de longe. */
+@Composable
+private fun PackBadge(index: Int) {
+    Box(
+        modifier = Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.secondaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = index.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSecondaryContainer,
+        )
+    }
+}
+
+private fun BmsPack.maxMinLabel(): String = when {
+    maxCellMv != null && minCellMv != null -> "$maxCellMv / $minCellMv"
+    cellsMv.isNotEmpty() -> "${cellsMv.max()} / ${cellsMv.min()}"
+    else -> "—"
 }
 
 /** Desequilíbrio: até 10 mV normal, até 30 mV atenção, acima disso crítico. */
