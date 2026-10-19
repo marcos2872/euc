@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
@@ -114,11 +115,6 @@ fun TimeSeriesChart(
         } else {
             "HH:mm"
         }
-        val timeFormatter = remember(timePattern) {
-            CartesianValueFormatter { _, value, _ ->
-                timeLabel(value.toLong(), timePattern)
-            }
-        }
         val valueFormatter = remember(unit) {
             CartesianValueFormatter { _, value, _ ->
                 if (unit.isEmpty()) format(value) else "${format(value)} $unit"
@@ -131,13 +127,7 @@ fun TimeSeriesChart(
         // a linha encosta na borda esquerda do gráfico.
         val labelStepMillis = remember(spanMillis) { (spanMillis / 5).coerceAtLeast(1_000L).toInt() }
         val itemPlacer = remember(labelStepMillis) {
-            HorizontalAxis.ItemPlacer.aligned(
-                spacing = { labelStepMillis },
-                // Rótulos nas posições dos dados: o primeiro cai exatamente no
-                // início do gráfico (e o último perto do fim). Sem recuo e sem
-                // deslocar os extremos, que era o que sobrepunha os vizinhos.
-                addExtremeLabelPadding = false,
-            )
+            HorizontalAxis.ItemPlacer.aligned(spacing = { labelStepMillis })
         }
         val scrollState = rememberVicoScrollState(scrollEnabled = interactive)
 
@@ -149,7 +139,11 @@ fun TimeSeriesChart(
                 ),
                 startAxis = VerticalAxis.rememberStart(valueFormatter = valueFormatter),
                 bottomAxis = HorizontalAxis.rememberBottom(
-                    valueFormatter = timeFormatter,
+                    // Os rótulos de hora são desenhados por nós, logo abaixo do
+                    // gráfico, alinhados às bordas (o Vico centraliza o primeiro
+                    // no início, deixando-o fora da coluna dos rótulos verticais
+                    // — e deslocar os extremos fazia uns sobreporem os outros).
+                    label = null,
                     itemPlacer = itemPlacer,
                 ),
             ),
@@ -159,6 +153,29 @@ fun TimeSeriesChart(
                 .height(height),
             scrollState = scrollState,
         )
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                timeLabel(samples.first().timeMs, timePattern),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall,
+                color = labelColor,
+            )
+            Text(
+                timeLabel((samples.first().timeMs + samples.last().timeMs) / 2, timePattern),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall,
+                color = labelColor,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                timeLabel(samples.last().timeMs, timePattern),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelSmall,
+                color = labelColor,
+                textAlign = TextAlign.End,
+            )
+        }
     }
 }
 
