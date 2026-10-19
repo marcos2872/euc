@@ -115,7 +115,43 @@ Obrigatório para `SET_LOCK` em V12+ e para **todo** controle no P6. V11 não ex
 - "V13" → `m11174R` / `m11211Q`
 - "V14" → `m11177T` + `m11207L`/`m11205G`/`m11213U` / `m11212S`
 
-**[APK]** Exemplo de parse (V12, `m11160H`, linhas 1596-1625), todos i16 little-endian /100:
+**Não existe layout único:** cada modelo tem parser próprio. As tabelas abaixo estão
+separadas por família. **Convenção de offsets:** "nos dados" = payload sem o byte de
+opcode; "no payload" = incluindo o opcode.
+
+### 5.1 V11y / família V14 (fw ≥1.4) — validado na roda
+
+Resposta ao poll `04`: opcode `0x84`, i16/u16 little-endian, offsets **nos dados**.
+Validado numa V11y real (fw 2.5.54) pelo app novo; bate com o layout do V14 do
+eucplanet/WheelLog:
+
+| Offset | Campo | Escala |
+|---|---|---|
+| 0 | Tensão | /100 V |
+| 2 | Corrente | /100 A |
+| 8 | Velocidade | /100 km/h |
+| 12 | Torque (não lido pelo app) | /100 N·m |
+| 14 | Carga do motor (PWM) | /100 % |
+| 20 | Pitch (tilt) | /100 ° |
+| 22 | Roll | /100 ° |
+| 28 | Viagem (V14) | ×10 m |
+| 34 | Bateria | /100 % |
+| 40 | Limite de velocidade — tiltback real da roda | /100 km/h |
+| 48 | Limite de corrente (58 A na V11y) | /100 A |
+| 58-63 | Temperaturas: MOS, motor, bateria, placa, CPU, IMU | `byte − 176` °C |
+| 74 | Estado: bits 0-2 = modo (0 travado, 1 rodando, 2 desligado, 3 parado) | — |
+
+Observações:
+- Temperaturas: byte `< 0x80` é tratado como sensor ausente (mesma proteção do app oficial).
+- O limite de corrente em `48` foi lido como 58,00 A na V11y; o eucplanet documenta `50`
+  para o V14 — **[INF]** pode variar por modelo (capturar antes de assumir).
+- Viagem e totais **não** vêm nesse quadro: usar `10 00 01` / `11` (§6.1).
+- O campo de limite do **quadro de settings** (§8) usa outra unidade (0,5 km/h); este
+  aqui é o valor real aplicado.
+
+### 5.2 V12 (EUC World 2.66.0, `m11160H`, linhas 1596-1625) — offsets **no payload**
+
+Todos i16 little-endian /100:
 
 | Offset | Campo |
 |---|---|
@@ -129,16 +165,23 @@ Obrigatório para `SET_LOCK` em V12+ e para **todo** controle no P6. V11 não ex
 | 59 | inteiro |
 | 63 | bitfield + inteiro |
 
-**[COM]** Layouts completos por modelo (WheelLog/eucplanet), resumo do V14:
-`0` tensão /100 V · `2` corrente /100 A · `8` velocidade /100 km/h · `12` torque /100 N·m · `14` PWM /100 % ·
-`16` potência bateria · `18` potência motor · `20` pitch /100° · `22` roll /100° · `28` trip ×10 m ·
-`34`/`36` bateria 1/2 % /100 · `40` limite velocidade dinâmico /100 · `50` limite corrente /100 ·
-`58-63` temperaturas (`byte - 176` °C) · `74` pcMode · `76` bit 1 = farol.
+**[COM]** V12 (layout compacto): velocidade em `4`, PWM em `8`, trip em `22` /100 km,
+bateria única em `24` /100, temps em `40-46`, state byte em `54`, light byte em `55`.
 
-**[COM]** V12 (layout compacto): velocidade em `4`, PWM em `8`, trip em `22` /100 km, bateria única em `24` /100,
-temps em `40-46`, state byte em `54`, light byte em `55`.
-**[COM]** V11 tem **duas variantes** (fw <1.4 e ≥1.4) — offsets diferentes.
-**[COM]** ⚠️ Divergência entre WheelLog e eucplanet na escala de potência (offset 16) e velocidade do V14: validar contra a roda real.
+### 5.3 V14 (WheelLog/eucplanet) — offsets nos dados
+
+`0` tensão /100 V · `2` corrente /100 A · `8` velocidade /100 km/h · `12` torque /100 N·m ·
+`14` PWM /100 % · `16` potência bateria · `18` potência motor · `20` pitch /100° · `22` roll /100° ·
+`28` trip ×10 m · `34`/`36` bateria 1/2 % /100 · `40` limite velocidade dinâmico /100 ·
+`50` limite corrente /100 · `58-63` temperaturas (`byte − 176` °C) · `74` pcMode · `76` bit 1 = farol.
+
+### 5.4 V11 (fw <1.4) — pendente
+
+**[COM]** A V11 tem **duas variantes** (fw <1.4 e ≥1.4) — offsets diferentes; a variante
+antiga não está documentada. Se aparecer uma, capturar.
+
+**[COM]** ⚠️ Divergência entre WheelLog e eucplanet na escala de potência (offset 16) e
+velocidade do V14: validar contra a roda real.
 
 ---
 
@@ -146,37 +189,43 @@ temps em `40-46`, state byte em `54`, light byte em `55`.
 
 **[APK]** Tabela completa extraída de `p364uh/C5937z.java` (payload não escapado; tipo `0x14` salvo indicação):
 
+> **Notação:** os payloads de **escrita** começam com o opcode `0x60` (`60 xx …`).
+> Versões anteriores deste doc transcreviam esse byte como `96` — `0x96` é
+> `0x80 | 0x16`, o opcode de **resposta** (mesmo padrão de `0x90`/`0x91` =
+> `0x80|0x10`/`0x80|0x11`); `0x60` é o de **comando**. Confirmado no app oficial
+> (`docs/protocolos/inmotion.md` §4.3) e validado na V11y.
+
 | Comando | Payload | Método EUC World | Notas [COM] |
 |---|---|---|---|
-| WRITE_SPEED_TILTBACK | `96 21 <u16 LE×100>` | m11192f1 | **Na V11y só funciona estendido**: `02 21 60 21 <u16 LE> 00 00` (tipo `0x16`) — validado em captura (30 → 35 → 60 km/h). O EUC World manda em framing padrão para a V11y e é ignorado |
-| WRITE_PEDAL_TILT | `96 22 <u16 LE>` | m11184Y0 | |
-| WRITE_PEDAL_SENSITIVITY | `96 25 <v> <v>` | m11183X0 | |
-| WRITE_RIDING_MODE | `96 23 <modo>` | m11187a1 | 1 = Sport (material comunitário chama de classic), 0 = Comfort |
-| WRITE_PERFORMANCE_MODE | `96 24 <0/1>` | m11186Z0 | |
-| WRITE_SPEAKER_VOLUME | `96 26 <0-100>` | m11190d1 | |
-| WRITE_STANDBY_TIMER | `96 28 <u16 seg>` | m11195i1 | |
-| WRITE_HEADLIGHT_BRIGHTNESS | `96 2B <v>` ou `<low> <high>` | m11173Q0/m11175R0 | V12: dois feixes |
-| WRITE_SOUNDS (mute) | `96 2C <0/1>` | m11189c1 | invertido no fio |
-| WRITE_DAYTIME_RUNNING_LIGHTS | `96 2D <0/1>` (V14) / `96 44` | m11167L0 | V12 não tem DRL |
-| WRITE_HANDLE_BUTTON | `96 2E <0/1>` | m11171N0 | invertido |
-| WRITE_AUTO_HEADLIGHT | `96 2F <0/1>` | m11159G0 | V12/V13/V14 |
-| WRITE_LOCK | `96 31 <0/1>` | m11176S0 | exige auth em V12+ |
-| WRITE_TRANSPORTATION_MODE | `96 32 <0/1>` | m11196j1 | |
-| WRITE_LOW_BATTERY_RIDING | `96 37 <0/1>` | m11178T0 | |
-| WRITE_COOLING_FAN_QUIET_MODE | `96 38 <0/1>` | m11166K0 | |
-| WRITE_MOTOR_SOUND | `96 39 <0/1>` | m11181V0 | |
-| WRITE_SPEED_ALARMS | `96 3E <u16> <u16>` | m11191e1 | dois tiers |
-| WRITE_HEADLIGHT | `96 50 <0/1>` (V14) / `<low> <high>` (V12) | m11210P0 | 1 byte ignorado em V12 HS/HT/Pro |
-| WRITE_HORN | `96 51 <id> <vol>` | — | **V11Y/V13/V14: `02 64` (playBeep)**; V9/V11/V12/V12S: `18 01` (playSound) — ver nota abaixo |
-| WRITE_CALIBRATION_CHECK/PERFORM | `96 52 01 00 01` (yaw) / `96 52 01 01 00` (pedal) | m11245z0 | |
-| WRITE_MOTOR_NO_LOAD_DETECTION | `96 36 <0/1>` | m11179U0 | |
-| WRITE_SCREEN_AUTO_OFF | `96 3D <0/1>` | m11188b1 | V12 |
-| WRITE_COOLING_FAN | `96 53 <0/1>` (fw≥1.4) / `96 43` | m11164J0 | |
-| WRITE_SPLIT_RIDING_MODES | `96 42 <0/1>` (V12) / `96 3E` | m11193g1 | |
-| WRITE_SPLIT_RIDING_MODES_SETTINGS | `96 3F <acc> <brk>` (V11+) / `96 40` (V12) | m11194h1 | |
-| WRITE_EXTENDED_LATERAL_TILT_LIMIT | `96 45 <0/1>` | m11169M0 | |
-| WRITE_AUTO_HEADLIGHT_THRESHOLDS | `96 2A <a> <b>` | m11163I0 | V12 |
-| WRITE_AUTO_HEADLIGHT_LOW_TO_HIGH_THRESHOLD | `96 30 <u16 LE>` | m11161H0 | V12 |
+| WRITE_SPEED_TILTBACK | `60 21 <u16 LE×100>` | m11192f1 | **Na V11y só funciona estendido**: `02 21 60 21 <u16 LE> 00 00` (tipo `0x16`) — validado em captura (30 → 35 → 60 km/h). O valor é **km/h × 100** (30 km/h = `B8 0B`), confirmado na roda: 59 → a roda reportou 59,00. O EUC World manda em framing padrão para a V11y e é ignorado |
+| WRITE_PEDAL_TILT | `60 22 <u16 LE>` | m11184Y0 | |
+| WRITE_PEDAL_SENSITIVITY | `60 25 <v> <v>` | m11183X0 | |
+| WRITE_RIDING_MODE | `60 23 <modo>` | m11187a1 | 1 = Sport (material comunitário chama de classic), 0 = Comfort |
+| WRITE_PERFORMANCE_MODE | `60 24 <0/1>` | m11186Z0 | |
+| WRITE_SPEAKER_VOLUME | `60 26 <0-100>` | m11190d1 | |
+| WRITE_STANDBY_TIMER | `60 28 <u16 seg>` | m11195i1 | |
+| WRITE_HEADLIGHT_BRIGHTNESS | `60 2B <v>` ou `<low> <high>` | m11173Q0/m11175R0 | V12: dois feixes |
+| WRITE_SOUNDS (mute) | `60 2C <0/1>` | m11189c1 | invertido no fio |
+| WRITE_DAYTIME_RUNNING_LIGHTS | `60 2D <0/1>` (V14) / `60 44` | m11167L0 | V12 não tem DRL |
+| WRITE_HANDLE_BUTTON | `60 2E <0/1>` | m11171N0 | invertido |
+| WRITE_AUTO_HEADLIGHT | `60 2F <0/1>` | m11159G0 | V12/V13/V14 |
+| WRITE_LOCK | `60 31 <0/1>` | m11176S0 | exige auth em V12+ |
+| WRITE_TRANSPORTATION_MODE | `60 32 <0/1>` | m11196j1 | |
+| WRITE_LOW_BATTERY_RIDING | `60 37 <0/1>` | m11178T0 | |
+| WRITE_COOLING_FAN_QUIET_MODE | `60 38 <0/1>` | m11166K0 | |
+| WRITE_MOTOR_SOUND | `60 39 <0/1>` | m11181V0 | |
+| WRITE_SPEED_ALARMS | `60 3E <u16> <u16>` | m11191e1 | dois tiers |
+| WRITE_HEADLIGHT | `60 50 <0/1>` (V14) / `<low> <high>` (V12) | m11210P0 | 1 byte ignorado em V12 HS/HT/Pro |
+| WRITE_HORN | `60 51 <id> <vol>` | — | **V11Y/V13/V14: `02 64` (playBeep)**; V9/V11/V12/V12S: `18 01` (playSound) — ver nota abaixo |
+| WRITE_CALIBRATION_CHECK/PERFORM | `60 52 01 00 01` (yaw) / `60 52 01 01 00` (pedal) | m11245z0 | |
+| WRITE_MOTOR_NO_LOAD_DETECTION | `60 36 <0/1>` | m11179U0 | |
+| WRITE_SCREEN_AUTO_OFF | `60 3D <0/1>` | m11188b1 | V12 |
+| WRITE_COOLING_FAN | `60 53 <0/1>` (fw≥1.4) / `60 43` | m11164J0 | |
+| WRITE_SPLIT_RIDING_MODES | `60 42 <0/1>` (V12) / `60 3E` | m11193g1 | |
+| WRITE_SPLIT_RIDING_MODES_SETTINGS | `60 3F <acc> <brk>` (V11+) / `60 40` (V12) | m11194h1 | |
+| WRITE_EXTENDED_LATERAL_TILT_LIMIT | `60 45 <0/1>` | m11169M0 | |
+| WRITE_AUTO_HEADLIGHT_THRESHOLDS | `60 2A <a> <b>` | m11163I0 | V12 |
+| WRITE_AUTO_HEADLIGHT_LOW_TO_HIGH_THRESHOLD | `60 30 <u16 LE>` | m11161H0 | V12 |
 | WRITE_LEDS_MODE / LEDS_MUSIC_COLOR / LEDS_SPEED_MODE | (ver código) | — | |
 | WRITE_DIAGNOSTICS | (ver código) | — | |
 
@@ -231,11 +280,42 @@ Modelos com 4 packs: V14/V13/V12 (via hash de modelo nas linhas 2872-2930).
 
 **[APK]** Parse por modelo: V11 `m11206J`, V12 `m11208O`, V13 `m11211Q`, V14 `m11212S`.
 
-**[COM]** V14: `0` max speed /100 · `2` alarm speed /100 · `8` ajuste pedal /10° · `10` mode flags ·
+### 8.1 V11y — validado na roda
+
+Resposta `A0 20` (payload `A0 20 <dados…>`); offsets **nos dados** (após os 2 bytes `A0 20`):
+
+| Offset | Campo | Escala |
+|---|---|---|
+| 0 | Limite de velocidade* | /100 |
+| 8 | Tilt dos pedais | /100 ° |
+| 10 | bit 0: modo de condução (0 = Comfort, 1 = Sport) | — |
+| 11 | Sensibilidade dos pedais | % |
+| 13 | Split riding: aceleração | % |
+| 14 | Split riding: frenagem | % |
+| 15 | Volume do alto-falante | % |
+| 34 | bit 2: split ligado · bit 5: tilt lateral estendido | — |
+
+\* O campo vem em unidades de **0,5 km/h** (12000 = 60 km/h), então `/100` daria 120 para
+a V11y — o app usa o **tiltback real da telemetria** (§5.1, offset 40) como referência. O
+EUC World tem o mesmo defeito.
+
+Confirmado em captura: modo (`dado[10]` bit 0) e volume (`dado[15]`). O EUC World lê os
+mesmos campos com +2 de deslocamento (payload: 2, 10, 13, 15, 16, 17, 36) — as duas
+convenções batem.
+
+**Não reportado nesse quadro** (o firmware não devolve; o app mantém o último valor
+conhecido): farol, DRL, brilho, ventilador, performance, low-battery, no-load,
+transporte, botão de alça e lock.
+
+### 8.2 V14 [COM]
+
+`0` max speed /100 · `2` alarm speed /100 · `8` ajuste pedal /10° · `10` mode flags ·
 `11`/`12` sensibilidade comfort/classic · `20` standby s · `30` flags A (bit0 NOT mute, bit2 DRL) ·
 `31` flags B (bit2 locked, bit4 transport).
 
-**[COM]** V12: `9` max speed /100 · `11`/`13` alarmes 1/2 /100 · `15` pedal /10° · `17` standby ·
+### 8.3 V12 [COM]
+
+`9` max speed /100 · `11`/`13` alarmes 1/2 /100 · `15` pedal /10° · `17` standby ·
 `19` mode flags · `22` volume · `39` flags (bit0 NOT mute, bit6 transport).
 
 ---
@@ -292,35 +372,35 @@ Sincronização roda→app em `si/C5600a.java:37-155` (callback key → chave de
 
 | Setting (UI) | Chave | Comando BLE (sub) | Parse de volta (offset em `m11207L`) |
 |---|---|---|---|
-| Luzes diurnas (DRL) | `in_daytime_running_lights` | `96 2D` (V14/V13/V11Y) | dado[34] bit 2 |
-| Farol on/off | `in_headlight_v11` | `96 50` (fw≥1.4) / `96 40` (antigo) | dado[34] bit 5 |
-| Brilho do farol | `in_headlight_brightness` | `96 2B <0-100>` | — |
-| Ventilador | `in_fan` | `96 53` (fw≥1.4) / `96 43` | — |
-| Ventilador silencioso | `in_fan_quiet_mode` | `96 38` | — |
-| Modo de condução | `in_riding_mode` | `96 23 <0/1>` (framing padrão, funciona) | dado[10] bit 0 (0 = Comfort, 1 = Sport) — confirmado em captura |
-| Split riding modes | `in_split_riding_modes` | `96 42` (V12) / `96 3E` | — |
-| Split aceleração | `in_split_riding_modes_acceleration` | `96 3F <acc> <brk>` (V11Y) / `96 40` (V12) | — |
+| Luzes diurnas (DRL) | `in_daytime_running_lights` | `60 2D` (V14/V13/V11Y) | dado[34] bit 2 |
+| Farol on/off | `in_headlight_v11` | `60 50` (fw≥1.4) / `60 40` (antigo) | dado[34] bit 5 |
+| Brilho do farol | `in_headlight_brightness` | `60 2B <0-100>` | — |
+| Ventilador | `in_fan` | `60 53` (fw≥1.4) / `60 43` | — |
+| Ventilador silencioso | `in_fan_quiet_mode` | `60 38` | — |
+| Modo de condução | `in_riding_mode` | `60 23 <0/1>` (framing padrão, funciona) | dado[10] bit 0 (0 = Comfort, 1 = Sport) — confirmado em captura |
+| Split riding modes | `in_split_riding_modes` | `60 42` (V12) / `60 3E` | — |
+| Split aceleração | `in_split_riding_modes_acceleration` | `60 3F <acc> <brk>` (V11Y) / `60 40` (V12) | — |
 | Split frenagem | `in_split_riding_modes_braking` | idem | — |
-| Modo performance | `in_performance_mode` | `96 24 <0/1>` | — |
-| Limite de velocidade | `in_speed_limit` | `96 21 <u16LE×100>` **estendido** (`02 21 60 21 … 00 00`) | telemetria dado[40] /100 (o campo do quadro de settings vem em unidades de 0,5 km/h: 12000 = 60 km/h) |
-| Sensibilidade dos pedais | `in_pedals_sensitivity` | `96 25 <v> <v>` | dado[11] |
-| Tilt dos pedais | `in_pedals_tilt` | `96 22 <u16LE>` | dado[8] /100 |
-| Volume do alto-falante | `in_speaker_volume` | `96 26 <0-100>` | dado[15] |
-| Low-battery riding | `in_go_home` | `96 37 <0/1>` | — |
-| Detecção motor sem carga | `in_motor_no_load_detection` | `96 36 <0/1>` | — |
-| Modo transporte | `in_transportation_mode` | `96 32 <0/1>` | — |
-| Botão de alça | `in_handle_button` | `96 2E <0/1>` | — |
-| Lock | `in_lock` | `96 31 <0/1>` | — |
-| Alarmes de velocidade 1/2 | `in_speed_alarm_1st/2nd` | `96 3E <u16> <u16>` | — |
-| Sons do motor | `in_motor_sound` | `96 39 <0/1>` | — |
-| Sensibilidade som do motor | `in_motor_sound_sensitivity` | `96 38 <0-100>` | — |
-| Auto-off da tela | `in_screen_auto_off` | `96 3D <0/1>` | — |
-| Standby timer | `in_standby_timer` | `96 28 <u16 seg>` | — |
-| Farol automático | `in_auto_headlight` | `96 2F <0/1>` | — |
-| Limiares do farol automático | `in_auto_headlight_threshold_on/off` | `96 2A <a> <b>` | — |
-| Limiar low→high | `in_auto_headlight_low_to_high_threshold` | `96 30 <u16LE>` | — |
-| Brilho low/high (V12) | `in_headlight_brightness_low/high` | `96 2B <low> <high>` | — |
-| Limite tilt lateral estendido | `in_extended_lateral_tilt_limit` | `96 45 <0/1>` | — |
+| Modo performance | `in_performance_mode` | `60 24 <0/1>` | — |
+| Limite de velocidade | `in_speed_limit` | `60 21 <u16LE×100>` **estendido** (`02 21 60 21 … 00 00`) | telemetria dado[40] /100 (o campo do quadro de settings vem em unidades de 0,5 km/h: 12000 = 60 km/h) |
+| Sensibilidade dos pedais | `in_pedals_sensitivity` | `60 25 <v> <v>` | dado[11] |
+| Tilt dos pedais | `in_pedals_tilt` | `60 22 <u16LE>` | dado[8] /100 |
+| Volume do alto-falante | `in_speaker_volume` | `60 26 <0-100>` | dado[15] |
+| Low-battery riding | `in_go_home` | `60 37 <0/1>` | — |
+| Detecção motor sem carga | `in_motor_no_load_detection` | `60 36 <0/1>` | — |
+| Modo transporte | `in_transportation_mode` | `60 32 <0/1>` | — |
+| Botão de alça | `in_handle_button` | `60 2E <0/1>` | — |
+| Lock | `in_lock` | `60 31 <0/1>` | — |
+| Alarmes de velocidade 1/2 | `in_speed_alarm_1st/2nd` | `60 3E <u16> <u16>` | — |
+| Sons do motor | `in_motor_sound` | `60 39 <0/1>` | — |
+| Sensibilidade som do motor | `in_motor_sound_sensitivity` | `60 38 <0-100>` | — |
+| Auto-off da tela | `in_screen_auto_off` | `60 3D <0/1>` | — |
+| Standby timer | `in_standby_timer` | `60 28 <u16 seg>` | — |
+| Farol automático | `in_auto_headlight` | `60 2F <0/1>` | — |
+| Limiares do farol automático | `in_auto_headlight_threshold_on/off` | `60 2A <a> <b>` | — |
+| Limiar low→high | `in_auto_headlight_low_to_high_threshold` | `60 30 <u16LE>` | — |
+| Brilho low/high (V12) | `in_headlight_brightness_low/high` | `60 2B <low> <high>` | — |
+| Limite tilt lateral estendido | `in_extended_lateral_tilt_limit` | `60 45 <0/1>` | — |
 
 **Fluxo de estado:** ao receber a resposta `A0 20` (settings), o adaptador parseia (`m11207L` para V11Y) e
 dispara callbacks por chave (ex.: `"daytimeRunningLights"`), que o app persiste em SharedPreferences

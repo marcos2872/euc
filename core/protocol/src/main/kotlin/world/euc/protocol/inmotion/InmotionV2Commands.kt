@@ -220,6 +220,12 @@ object InmotionV2Commands {
      * Liga/desliga os modos de condução separados (split riding modes).
      *
      * V11Y usa `0x3E`; V9/V12 usam `0x42`.
+     *
+     * ⚠️ **Opcode não confirmado** na V11y: no app oficial `0x3E` é o comando
+     * dos alarmes de velocidade (`genSetWarningLimitSpeedMsg`), então este
+     * payload de 1 byte pode ser lido como alarme truncado. Por isso o comando
+     * não é exposto na UI nem reaplicado na conexão até haver captura — ver
+     * `docs/09-pendencias-inmotion.md` §1.1.
      */
     fun splitRidingModes(enabled: Boolean, legacyOpcode: Boolean = false): InmotionCommand =
         control(if (legacyOpcode) 0x42 else 0x3E, if (enabled) 1 else 0)
@@ -227,7 +233,8 @@ object InmotionV2Commands {
     /**
      * Ajusta aceleração/frenagem dos modos separados (0-100 cada).
      *
-     * V11Y usa `0x3F`; V9/V12 usam `0x40`.
+     * V11Y usa `0x3F`; V9/V12 usam `0x40`. Mesma ressalva de opcode não
+     * confirmado de [splitRidingModes].
      */
     fun splitRidingModesSettings(
         acceleration: Int,

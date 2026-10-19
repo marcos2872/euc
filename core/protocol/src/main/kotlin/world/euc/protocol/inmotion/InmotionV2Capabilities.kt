@@ -15,6 +15,11 @@ import world.euc.protocol.model.WheelSettingId
  * - **Lock** não aparece nas telas do EUC World (é ação rápida), mas é
  *   suportado na V11y/V13/V14 via framing estendido + autenticação.
  * - V13/V14 usam farol automático no lugar de DRL/brilho/ventilador.
+ * - **Modos separados (split riding) não são expostos**: o opcode do comando
+ *   (`0x3E`) é o mesmo dos alarmes de velocidade no app oficial e o comando
+ *   real ainda não foi confirmado em captura — ver
+ *   `docs/09-pendencias-inmotion.md` §1.1. O quadro de settings continua sendo
+ *   lido (offsets 13/14 e flag em 34), mas nada é escrito na roda.
  */
 object InmotionV2Capabilities {
 
@@ -28,7 +33,6 @@ object InmotionV2Capabilities {
 
     private val V11Y = COMUM + setOf(
         WheelSettingId.RIDING_MODE,
-        WheelSettingId.SPLIT_RIDING_MODES,
         WheelSettingId.PERFORMANCE_MODE,
         WheelSettingId.LOW_BATTERY_RIDING,
         WheelSettingId.MOTOR_NO_LOAD_DETECTION,
@@ -45,7 +49,6 @@ object InmotionV2Capabilities {
     private val V11 = V11Y
 
     private val V13_V14 = COMUM + setOf(
-        WheelSettingId.SPLIT_RIDING_MODES,
         WheelSettingId.SPEAKER_VOLUME,
         WheelSettingId.LOCK,
         WheelSettingId.EXTENDED_LATERAL_TILT_LIMIT,
@@ -54,7 +57,6 @@ object InmotionV2Capabilities {
     private val V12 = COMUM + setOf(
         WheelSettingId.RIDING_MODE,
         WheelSettingId.SPEED_ALARMS,
-        WheelSettingId.SPLIT_RIDING_MODES,
         WheelSettingId.PERFORMANCE_MODE,
         WheelSettingId.LOW_BATTERY_RIDING,
         WheelSettingId.HANDLE_BUTTON,
@@ -66,7 +68,6 @@ object InmotionV2Capabilities {
 
     private val V9_V12S = COMUM + setOf(
         WheelSettingId.RIDING_MODE,
-        WheelSettingId.SPLIT_RIDING_MODES,
         WheelSettingId.SPEED_ALARMS,
         WheelSettingId.LOW_BATTERY_RIDING,
         WheelSettingId.MOTOR_NO_LOAD_DETECTION,
@@ -80,7 +81,6 @@ object InmotionV2Capabilities {
 
     private val P6 = COMUM + setOf(
         WheelSettingId.RIDING_MODE,
-        WheelSettingId.SPLIT_RIDING_MODES,
         WheelSettingId.SPEED_ALARMS,
         WheelSettingId.LOW_BATTERY_RIDING,
         WheelSettingId.MOTOR_NO_LOAD_DETECTION,

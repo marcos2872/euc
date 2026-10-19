@@ -5,9 +5,13 @@
 > documentado no [`docs/03-protocolo-inmotion.md`](03-protocolo-inmotion.md) e o que
 > o **app oficial 8.1.34** expõe ([`docs/protocolos/inmotion.md`](protocolos/inmotion.md)).
 >
-> Cada item traz evidência (`arquivo:linha`) e prioridade. Marcar `[x]` ao concluir.
+> Cada item traz evidência (`arquivo:linha` ou função) e prioridade. Marcar `[x]` ao concluir.
 > **Regra:** nada aqui deve ser implementado sem captura/teste na roda — a coluna
-> “o que já funciona” existe para não regredir o que está validado.
+> "o que já funciona" existe para não regredir o que está validado.
+>
+> **Status (out/2026):** §2 (correções de doc) **concluído**; §1.1 com medida interina
+> (modos separados escondidos até a captura); §1.2, §1.3 e §3.x dependem de
+> captura/teste na roda (§4.1/§4.2).
 
 ---
 
@@ -22,9 +26,9 @@
 | Lock `60 31 <0/1>` (extra) | `InmotionV2Commands.kt:84` | doc oficial §8.3 | ⏳ auth não confirmada (ver 1.3) |
 | Buzina por modelo: V11Y/V13/V14 → `51 02 64`; V9/V11/V12/V12S → `51 18 01` | `InmotionV2Commands.kt:117` | doc oficial §8.2 | ✅ |
 | Ventilador `53` (fw≥1.4) / `43`; silencioso `38` | `InmotionV2Commands.kt:200` | doc oficial §8.5 | ⏳ |
-| Calibração `52 01 00 01` (yaw) / `52 01 01 00` (pedal) | `InmotionV2Commands.kt:256` | doc oficial §8.5 | ⏳ |
-| Alarmes de velocidade `3E <u16> <u16>` | `InmotionV2Commands.kt:250` | doc oficial §8.1 | ⏳ |
-| Tilt lateral estendido `45` | `InmotionV2Commands.kt:243` | doc oficial §9.1 | ⏳ |
+| Calibração `52 01 00 01` (yaw) / `52 01 01 00` (pedal) | `InmotionV2Commands.kt:263` | doc oficial §8.5 | ⏳ |
+| Alarmes de velocidade `3E <u16> <u16>` | `InmotionV2Commands.kt:257` | doc oficial §8.1 | ⏳ |
+| Tilt lateral estendido `45` | `InmotionV2Commands.kt:250` | doc oficial §9.1 | ⏳ |
 | Odômetros `10 00 01`→`0x90`@23 · `11`→`0x91`@1/@5 | `InmotionV2StatisticsParser.kt:66-68` | doc 03 §6.1 | ✅ |
 | Modo `23`, volume `26`, sensibilidade `25`, performance `24`, DRL `2D`, brilho `2B`, no-load `36`, bateria baixa `37`, auto-off `3D`, standby `28`, transporte `32` | `InmotionV2Commands.kt:151-192` | doc 03 §6 | ✅ (modo/volume/sensibilidade) |
 | Telemetria: tensão@0, corrente@2, velocidade@8, carga@14, pitch@20, roll@22, bateria@34, limite@40, limite de corrente@48, temps@58-63 (tudo `/100`, temps `u8-40`) | `InmotionV2TelemetryParser.kt:114-126` | app validado | ✅ |
@@ -34,20 +38,22 @@
 
 ## 1. Correções no app (código)
 
-### 1.1 🔴 Modos separados usam o opcode dos alarmes de velocidade
+### 1.1 🟡 parcial — Modos separados usam o opcode dos alarmes de velocidade
 
-- **Evidência:** `InmotionV2Commands.kt:224` (`splitRidingModes` → `0x3E`, V11y) **e**
-  `:251` (`speedAlarms` → `0x3E <u16> <u16>`) — o mesmo opcode para duas coisas.
+- **Evidência:** `InmotionV2Commands.splitRidingModes()` (→ `0x3E`, V11y) **e**
+  `InmotionV2Commands.speedAlarms()` (→ `0x3E <u16> <u16>`) — o mesmo opcode para duas coisas.
 - **O app oficial diz:** `0x3E` = `genSetWarningLimitSpeedMsg` (alarmes 1/2), e os modos
   separados têm outros geradores (`genSpeedingBrakingOnOffMsg`, `genAccForceMsg`,
   `genBrakeForceMsg`) — ver doc oficial §8.1.
-- **Risco:** o botão "Ativar" dos modos separados provavelmente **não faz nada** (ou
-  escreve um payload de 1 byte num comando que espera 4).
-- **Ação:** capturar o app oficial (§4.1) e descobrir o opcode real. Enquanto isso,
-  esconder o cartão "Modos separados" da UI (tirar `WheelSettingId.SPLIT_RIDING_MODES`
-  das capacidades da V11y) ou marcá-lo como experimental.
-- [ ] capturar
-- [ ] corrigir o opcode (ou esconder da UI até corrigir)
+- **Risco:** o botão "Ativar" dos modos separados provavelmente **não faz nada** — ou pior,
+  um payload de 1 byte é lido como alarme truncado. O app também **reenviava** esse comando
+  e o `0x3F` a cada conexão (via "reaplicar ajustes").
+- **Ação:** capturar o app oficial (§4.1) e descobrir o opcode real.
+- [x] **medida interina (out/2026):** `SPLIT_RIDING_MODES` removido de
+      `InmotionV2Capabilities` (não aparece mais na tela de ajustes) e o reenvio na conexão
+      foi desligado em `WheelConnectionManager.maybeReapplySettings()`; teste
+      `modos separados nao sao expostos enquanto o opcode nao for confirmado` cobre a regressão
+- [ ] capturar o opcode real e reabilitar (UI + reapply + capabilities)
 
 ### 1.2 🟠 Inversões não confirmadas: `0x2C` (som/mute) e `0x2E` (botão da alça)
 
@@ -61,34 +67,38 @@
 ### 1.3 🟠 Autenticação / lock sem validação
 
 - **O que está certo:** o handshake do doc 03 §4 está implementado corretamente
-  (`InmotionV2Commands.kt:268-278`: `13 04 02 00 00 02` → `13 14 02 00 00 82 <blob>`).
+  (`InmotionV2Commands.requestAuthKey()`/`verifyAuth()`: `13 04 02 00 00 02` →
+  `13 14 02 00 00 82 <blob>`).
 - **O que falta:** confirmar na V11y que o lock realmente engata depois do handshake
   (a roda precisa estar **parada e apoiada**).
 - [ ] testar lock com a roda parada
 - [ ] capturar o handshake do app oficial e comparar byte a byte
 
-### 1.4 🟡 Comandos implementados mas sem uso/validação
+### 1.4 ✅ decidido — Comandos implementados mas sem uso/validação
 
 - `sounds(0x2C)`, `standbyTimer(0x28)`, `motorSound(0x39)`, `screenAutoOff(0x3D)`,
-  `splitRidingModesSettings(0x3F/0x40)` — existem no código, mas não estão expostos na
-  UI da V11y (ou não foram testados). Decidir: expor (com validação) ou remover.
-- [ ] revisar
+  `splitRidingModesSettings(0x3F/0x40)` — **mantidos** no núcleo (documentados para outros
+  modelos) mas **não expostos** na UI da V11y. Revisar caso a caso quando houver roda
+  desses modelos (ou captura).
+- [x] revisar (mantidos, sem exposição)
 
 ---
 
-## 2. Correções na documentação
+## 2. Correções na documentação — ✅ concluído (out/2026)
 
-- [ ] **2.1** `docs/03` §6: trocar a notação `96` por `60` nos payloads de **escrita**
-      (`0x96 = 0x80 | 0x16` é o opcode de **resposta**; `0x60` é o de comando — confirmado
-      no app oficial §4.3 e no nosso app).
-- [ ] **2.2** `docs/03` §9.1: corrigir o exemplo do tiltback — o valor é `km/h × 100`
-      (30 km/h = `B8 0B`), não `30 00`. O app validou `59 → 59,00`.
-- [ ] **2.3** `docs/03` §5: separar a tabela de telemetria **por variante** (V11 fw<1.4 ×
-      V11y/V12) e registrar os offsets validados do app (seção 0 acima). Hoje a tabela
-      mistura as duas e não diz qual é qual.
-- [ ] **2.4** Adicionar a **tabela de settings** validada (offsets da seção 0).
-- [ ] **2.5** `docs/protocolos/inmotion.md` §11: marcar as lacunas conforme forem
-      fechadas pela captura.
+- [x] **2.1** `docs/03` §6 + §10: notação `96` → `60` nos payloads de **escrita** (66
+      ocorrências) + nota explicando que `0x96 = 0x80 | 0x16` é o opcode de **resposta**
+      (mesmo padrão de `0x90`/`0x91`).
+- [x] **2.2** Exemplo do tiltback corrigido: o valor é `km/h × 100` — 30 km/h = `B8 0B`
+      (não `30 00`). Corrigido no `docs/protocolos/inmotion.md` §4.3 e anotado no
+      `docs/03` §6.
+- [x] **2.3** `docs/03` §5 reestruturado **por variante**: §5.1 V11y/família V14 (offsets
+      validados na roda), §5.2 V12 (EUC World, offsets no payload), §5.3 V14
+      (WheelLog/eucplanet), §5.4 V11 fw<1.4 (pendente).
+- [x] **2.4** Tabela de **settings da V11y** adicionada em `docs/03` §8.1 (validada),
+      com a nota do campo de limite em 0,5 km/h e o que o firmware não reporta.
+- [x] **2.5** `docs/protocolos/inmotion.md` §5.3 e §11 atualizados com o que já foi
+      confirmado (framing V11y, buzina V11y, offsets V11y, escalas parciais).
 
 ---
 
@@ -144,6 +154,10 @@ para a V11y hoje.
    writes/notifies em hex.
 4. Anotar no `docs/03` e no `docs/protocolos/inmotion.md` o que for confirmado.
 
+> **Alternativa sem o app oficial:** uma sonda de debug no próprio app euc (enviar as
+> rotas candidatas e logar as respostas em hex) captura o mesmo para 1.1/1.2/3.1 — só
+> não cobre o handshake de auth do app oficial (1.3).
+
 ### 4.2 Teste direto na roda (sem captura)
 
 | Comando | Como testar | Esperado |
@@ -159,7 +173,7 @@ para a V11y hoje.
 ## 5. Ordem sugerida
 
 1. **Captura (§4.1)** — destrava 1.1, 1.2, 1.3 e 3.1
-2. **Correções nos docs (§2)** — barato, evita repetir erro
+2. ~~**Correções nos docs (§2)**~~ — ✅ concluído (out/2026)
 3. **BMS por célula (§3.1)** — maior ganho de funcionalidade para a V11y
 4. **Extras de identificação (§3.2)**
 5. **Alarmes de BMS (§3.3)**

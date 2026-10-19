@@ -516,12 +516,11 @@ class WheelConnectionManager(context: Context) {
         settings.pedalTiltDegrees?.let { setPedalTilt(it) }
         settings.pedalSensitivityPercent?.let { setPedalSensitivity(it) }
         settings.ridingMode?.let { setRidingMode(it) }
-        settings.splitRidingModesEnabled?.let { setSplitRidingModes(it) }
-        val acceleration = settings.splitRidingAccelerationPercent
-        val braking = settings.splitRidingBrakingPercent
-        if (acceleration != null && braking != null) {
-            setSplitRidingSettings(acceleration, braking)
-        }
+        // Modos separados: NÃO reaplicados por enquanto. O opcode do comando
+        // (`0x3E`) é o mesmo dos alarmes de velocidade no app oficial e o comando
+        // real ainda não foi confirmado em captura — reenviar um payload não
+        // validado a cada conexão poderia escrever nos alarmes da roda.
+        // Ver docs/09-pendencias-inmotion.md §1.1.
         settings.speakerVolumePercent?.let { setSpeakerVolume(it) }
         settings.extendedLateralTiltLimit?.let { setExtendedLateralTiltLimit(it) }
 

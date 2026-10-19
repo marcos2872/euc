@@ -85,4 +85,18 @@ class InmotionV2CapabilitiesTest {
             assertTrue(WheelSettingId.CALIBRATION in capabilities, "falta CALIBRATION em $model")
         }
     }
+
+    @Test
+    fun `modos separados nao sao expostos enquanto o opcode nao for confirmado`() {
+        // O opcode 0x3E é o mesmo dos alarmes de velocidade no app oficial;
+        // reenviar o payload não validado poderia escrever nos alarmes da roda.
+        // Ver docs/09-pendencias-inmotion.md §1.1.
+        InmotionModel.entries.forEach { model ->
+            val capabilities = InmotionV2Capabilities.forModel(model)
+            assertFalse(
+                WheelSettingId.SPLIT_RIDING_MODES in capabilities,
+                "SPLIT_RIDING_MODES exposto em $model sem captura",
+            )
+        }
+    }
 }

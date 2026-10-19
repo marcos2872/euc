@@ -239,18 +239,20 @@ o app oficial usa o caminho *extra*.
 [COM] doc 03 §2/§9.1 (payload não escapado; `CK` = XOR):
 
 ```
-tiltback V11y (estendido) : AA AA 16 08 02 21 60 21 30 00 00 00 CK   (30 km/h)
+tiltback V11y (estendido) : AA AA 16 08 02 21 60 21 B8 0B 00 00 CK   (30 km/h → 3000)
 lock (V12+)               : AA AA 16 05 02 21 60 31 01 CK
 horn V11Y/V13/V14         : AA AA 16 06 02 21 60 51 02 64 CK
 horn V9/V11/V12/V12S      : AA AA 16 06 02 21 60 51 18 01 CK
 ```
 
-> ⚠️ **Correção de notação do doc 03:** a tabela do §6 lista vários payloads com
-> prefixo `96` (ex.: `96 21 <u16>`), enquanto as capturas validadas (§9.1) e o
-> eucplanet usam `60`. `0x96 = 0x80 | 0x16` é o **opcode de resposta** (o mesmo padrão
-> de `0x90`/`0x91` = `0x80|0x10`/`0x80|0x11`); `0x60` é o opcode de **comando**.
-> Ler `96` como resposta e `60` como escrita é consistente com todos os quadros
-> `02 21 60 xx …` — **[INF]**, confirmar em captura.
+> ⚠️ **Correção do valor do tiltback:** o exemplo antigo trazia `30 00` para "30 km/h", mas o
+> campo é **km/h × 100** (`u16` little-endian) — 30 km/h = `3000` = `B8 0B`. Validado na
+> V11y: 59 km/h → a roda passou a reportar 59,00 (e 30 → 35 → 60 na captura inicial).
+
+> ⚠️ **Correção de notação do doc 03:** a tabela do §6 listava vários payloads com
+> prefixo `96` (ex.: `96 21 <u16>`); o correto é `60`. `0x96 = 0x80 | 0x16` é o **opcode de
+> resposta** (o mesmo padrão de `0x90`/`0x91` = `0x80|0x10`/`0x80|0x11`); `0x60` é o opcode
+> de **comando**. O doc 03 já foi corrigido (`docs/09-pendencias-inmotion.md` §2.1).
 
 ### 4.4 V1 (`ezcan`)
 
@@ -296,8 +298,9 @@ Nomes de campos (~todos os que o app exibe/parseia), observados no pool:
 ### 5.3 Offsets e escalas
 
 [COM] Os offsets completos da família V2 estão em
-[`docs/03-protocolo-inmotion.md`](../03-protocolo-inmotion.md) — **§5** (V12/V14/V11 e variantes) e
-**§6.1** (odômetros). **Não foram recuperados offsets novos do app oficial**
+[`docs/03-protocolo-inmotion.md`](../03-protocolo-inmotion.md) — **§5** (V11y/V14/V12/V11 por
+variante), **§6.1** (odômetros) e **§8** (settings). O layout da **V11y foi validado na roda**
+pelo app novo (§5.1 e §8.1 do doc 03). **Não foram recuperados offsets novos do app oficial**
 nesta análise (lacuna de método, ver §11). O que o app oficial **confirma**:
 
 - cada modelo tem parser próprio (não há layout único) — coerente com o doc 03 §5;
@@ -622,10 +625,13 @@ não expõe. **Confirmar com uma V9 real.**
    o echo é idêntico (doc 03 §4). Testar em V12/V13/V14/P6.
 3. **Framing por modelo:** confirmar quais comandos saem em `0x14` e quais em `0x16`
    (`genLocalStandard*` × `genLocalExtra*`) para V11Y, V12, V13, V14, V18, X1, P6.
+   **Parcial:** na V11y, tiltback e lock exigem `0x16`; modo, volume e sensibilidade
+   funcionam em `0x14` (doc 03 §6, validado na roda). Faltam os demais modelos.
 4. **Buzina:** validar `playBeep` (`02 64`) × `playSound` (`18 01`) por modelo **e por
-   firmware** (V11 tem `_V11CmdV137`).
+   firmware** (V11 tem `_V11CmdV137`). **V11y confirmada** com `60 51 02 64` (bipe curto;
+   `18 01` gera tom contínuo que não para — doc 03 §9.1). Faltam os demais.
 5. **Offsets de telemetria** por modelo/firmware (V11Y, V12, V13, V14, V18, X1, P6,
-   E25) — doc 03 §5 cobre V12/V14/V11; falta o resto.
+   E25) — doc 03 §5 cobre a V11y (validado na roda), V12, V14 e V11; falta o resto.
 6. **Tabela `hexCode`/`carType` → modelo** do app oficial (não extraída).
 7. **UUID por modelo** (`_bleUuid1/2/3`): confirmar qual conjunto cada geração usa,
    sobretudo AE00/AE01/AE02 (provável `elephant`).
@@ -634,6 +640,8 @@ não expõe. **Confirmar com uma V9 real.**
 10. **V9:** não existe no app 8.1.34; confirmar se é "V10-like" ou se só o EUC World
     suporta.
 11. **Potência/torque/escalas divergentes** (doc 03 §5): validar contra a roda.
+    **Parcial:** tensão, corrente, velocidade, limite de velocidade e limite de corrente
+    validados na V11y (doc 03 §5.1); torque e potência ainda não são lidos pelo app.
 12. **Modelos novos (V18/X1/E25)** não têm nenhum offset documentado — prioridade de
     captura se forem alvo.
 
