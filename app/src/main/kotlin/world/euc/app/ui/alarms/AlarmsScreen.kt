@@ -2,8 +2,12 @@ package world.euc.app.ui.alarms
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -11,21 +15,34 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import world.euc.app.ui.components.SectionCard
 import world.euc.app.ui.components.SliderRow
 import world.euc.app.ui.components.SwitchRow
+import world.euc.app.ui.components.formatValue
+import world.euc.app.ui.designsystem.EucSpacing
 import world.euc.app.wheel.WheelConnectionManager
 import world.euc.app.wheel.WheelUiState
+import world.euc.protocol.alarm.AlarmConfig
+import world.euc.protocol.alarm.AlarmType
 
 /**
- * Configuração dos alarmes do app: níveis de velocidade, temperatura,
- * bateria, margem de segurança, tensões e avisos (voz/vibração).
+ * Configuração dos alarmes do app: cada nível tem seu próprio liga/desliga,
+ * além do valor que o dispara. Com um nível desligado, o maior nível *ligado*
+ * atingido é quem dispara (desligar o nível 2 não silencia o nível 1).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +52,10 @@ fun AlarmsScreen(
     onBack: () -> Unit,
 ) {
     val config = state.alarmConfig
+
+    fun update(updated: AlarmConfig) = manager.updateAlarmConfig(updated)
+    fun setEnabled(type: AlarmType, enabled: Boolean) =
+        update(config.withTypeEnabled(type, enabled))
 
     Scaffold(
         topBar = {
@@ -53,110 +74,220 @@ fun AlarmsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = EucSpacing.screen),
+            verticalArrangement = Arrangement.spacedBy(EucSpacing.md),
         ) {
             SectionCard("Avisos") {
                 SwitchRow("Alarmes ativos", config.enabled) {
-                    manager.updateAlarmConfig(config.copy(enabled = it))
+                    update(config.copy(enabled = it))
                 }
                 SwitchRow("Voz (TTS)", config.voiceEnabled) {
-                    manager.updateAlarmConfig(config.copy(voiceEnabled = it))
+                    update(config.copy(voiceEnabled = it))
                 }
                 SwitchRow("Vibração", config.vibrationEnabled) {
-                    manager.updateAlarmConfig(config.copy(vibrationEnabled = it))
+                    update(config.copy(vibrationEnabled = it))
                 }
+                SwitchRow(
+                    label = "Avisar se perder a conexão",
+                    checked = config.isEnabled(AlarmType.CONNECTION_LOST),
+                    description = "Fala e vibra quando a telemetria para de chegar.",
+                ) { enabled -> setEnabled(AlarmType.CONNECTION_LOST, enabled) }
+                SliderRow(
+                    label = "Tempo sem dados",
+                    value = (config.connectionLostAfterMillis / 1000f),
+                    valueRange = 3f..30f,
+                    unit = " s",
+                    onCommit = { update(config.copy(connectionLostAfterMillis = (it * 1000).toLong())) },
+                )
             }
 
             SectionCard("Velocidade") {
-                SliderRow(
+                AlarmLevel(
                     label = "Nível 1 (baixa prioridade)",
+                    enabled = config.isEnabled(AlarmType.SPEED_1),
+                    onEnabledChange = { setEnabled(AlarmType.SPEED_1, it) },
                     value = config.speedAlarm1Kmh.toFloat(),
                     valueRange = 5f..60f,
                     unit = " km/h",
-                    onCommit = { manager.updateAlarmConfig(config.copy(speedAlarm1Kmh = it.toDouble())) },
+                    onCommit = { update(config.copy(speedAlarm1Kmh = it.toDouble())) },
                 )
-                SliderRow(
+                AlarmLevel(
                     label = "Nível 2",
+                    enabled = config.isEnabled(AlarmType.SPEED_2),
+                    onEnabledChange = { setEnabled(AlarmType.SPEED_2, it) },
                     value = config.speedAlarm2Kmh.toFloat(),
                     valueRange = 5f..70f,
                     unit = " km/h",
-                    onCommit = { manager.updateAlarmConfig(config.copy(speedAlarm2Kmh = it.toDouble())) },
+                    onCommit = { update(config.copy(speedAlarm2Kmh = it.toDouble())) },
                 )
-                SliderRow(
+                AlarmLevel(
                     label = "Nível 3 (alta prioridade)",
+                    enabled = config.isEnabled(AlarmType.SPEED_3),
+                    onEnabledChange = { setEnabled(AlarmType.SPEED_3, it) },
                     value = config.speedAlarm3Kmh.toFloat(),
                     valueRange = 5f..80f,
                     unit = " km/h",
-                    onCommit = { manager.updateAlarmConfig(config.copy(speedAlarm3Kmh = it.toDouble())) },
+                    onCommit = { update(config.copy(speedAlarm3Kmh = it.toDouble())) },
                 )
-                SliderRow(
-                    label = "Margem do aviso antecipado",
+                AlarmLevel(
+                    label = "Aviso antecipado",
+                    enabled = config.isEnabled(AlarmType.SPEED_PRE_1),
+                    onEnabledChange = { enabled ->
+                        update(
+                            config
+                                .withTypeEnabled(AlarmType.SPEED_PRE_1, enabled)
+                                .withTypeEnabled(AlarmType.SPEED_PRE_2, enabled),
+                        )
+                    },
                     value = config.preAlarmMarginKmh.toFloat(),
                     valueRange = 0f..10f,
                     unit = " km/h",
-                    onCommit = { manager.updateAlarmConfig(config.copy(preAlarmMarginKmh = it.toDouble())) },
+                    onCommit = { update(config.copy(preAlarmMarginKmh = it.toDouble())) },
                 )
                 SwitchRow("Alarme do limite da roda (tiltback)", config.speedLimitAlarmEnabled) {
-                    manager.updateAlarmConfig(config.copy(speedLimitAlarmEnabled = it))
+                    update(config.copy(speedLimitAlarmEnabled = it))
                 }
                 SliderRow(
                     label = "Margem do limite da roda",
                     value = config.speedLimitMarginKmh.toFloat(),
                     valueRange = 0f..10f,
                     unit = " km/h",
-                    onCommit = { manager.updateAlarmConfig(config.copy(speedLimitMarginKmh = it.toDouble())) },
+                    onCommit = { update(config.copy(speedLimitMarginKmh = it.toDouble())) },
                 )
             }
 
             SectionCard("Bateria e energia") {
-                SliderRow(
+                AlarmLevel(
                     label = "Bateria baixa",
+                    enabled = config.isEnabled(AlarmType.BATTERY),
+                    onEnabledChange = { setEnabled(AlarmType.BATTERY, it) },
                     value = config.batteryAlarmPercent.toFloat(),
                     valueRange = 0f..50f,
                     unit = " %",
-                    onCommit = { manager.updateAlarmConfig(config.copy(batteryAlarmPercent = it.toDouble())) },
+                    onCommit = { update(config.copy(batteryAlarmPercent = it.toDouble())) },
                 )
-                SliderRow(
+                AlarmLevel(
                     label = "Margem de segurança",
+                    enabled = config.isEnabled(AlarmType.SAFETY_MARGIN),
+                    onEnabledChange = { setEnabled(AlarmType.SAFETY_MARGIN, it) },
                     value = config.safetyMarginAlarmPercent.toFloat(),
                     valueRange = 0f..50f,
                     unit = " %",
-                    onCommit = { manager.updateAlarmConfig(config.copy(safetyMarginAlarmPercent = it.toDouble())) },
+                    onCommit = { update(config.copy(safetyMarginAlarmPercent = it.toDouble())) },
                 )
-                SliderRow(
-                    label = "Corrente de pico (0 = desligado)",
+                AlarmLevel(
+                    label = "Corrente de pico",
+                    enabled = config.isEnabled(AlarmType.CURRENT),
+                    onEnabledChange = { enabled ->
+                        update(
+                            config
+                                .withTypeEnabled(AlarmType.CURRENT, enabled)
+                                // Ao ligar sem valor definido, assume um limite sensato.
+                                .let { if (enabled && it.currentAlarmAmps <= 0) it.copy(currentAlarmAmps = 40.0) else it },
+                        )
+                    },
                     value = config.currentAlarmAmps.toFloat(),
                     valueRange = 0f..120f,
                     unit = " A",
-                    onCommit = { manager.updateAlarmConfig(config.copy(currentAlarmAmps = it.toDouble())) },
+                    onCommit = { update(config.copy(currentAlarmAmps = it.toDouble())) },
                 )
             }
 
             SectionCard("Temperatura e tensão") {
-                SliderRow(
+                AlarmLevel(
                     label = "Temperatura máxima",
+                    enabled = config.isEnabled(AlarmType.TEMPERATURE),
+                    onEnabledChange = { setEnabled(AlarmType.TEMPERATURE, it) },
                     value = config.temperatureAlarmCelsius.toFloat(),
                     valueRange = 30f..100f,
                     unit = " °C",
-                    onCommit = { manager.updateAlarmConfig(config.copy(temperatureAlarmCelsius = it.toDouble())) },
+                    onCommit = { update(config.copy(temperatureAlarmCelsius = it.toDouble())) },
                 )
-                SliderRow(
-                    label = "Sobretensão (0 = desligado)",
+                AlarmLevel(
+                    label = "Sobretensão",
+                    enabled = config.isEnabled(AlarmType.OVERVOLTAGE),
+                    onEnabledChange = { enabled ->
+                        update(
+                            config
+                                .withTypeEnabled(AlarmType.OVERVOLTAGE, enabled)
+                                .let { if (enabled && it.overvoltageVolts <= 0) it.copy(overvoltageVolts = 84.0) else it },
+                        )
+                    },
                     value = config.overvoltageVolts.toFloat(),
                     valueRange = 0f..130f,
                     unit = " V",
-                    onCommit = { manager.updateAlarmConfig(config.copy(overvoltageVolts = it.toDouble())) },
+                    onCommit = { update(config.copy(overvoltageVolts = it.toDouble())) },
                 )
-                SliderRow(
-                    label = "Subtensão (0 = desligado)",
+                AlarmLevel(
+                    label = "Subtensão",
+                    enabled = config.isEnabled(AlarmType.UNDERVOLTAGE),
+                    onEnabledChange = { enabled ->
+                        update(
+                            config
+                                .withTypeEnabled(AlarmType.UNDERVOLTAGE, enabled)
+                                .let { if (enabled && it.undervoltageVolts <= 0) it.copy(undervoltageVolts = 60.0) else it },
+                        )
+                    },
                     value = config.undervoltageVolts.toFloat(),
                     valueRange = 0f..120f,
                     unit = " V",
-                    onCommit = { manager.updateAlarmConfig(config.copy(undervoltageVolts = it.toDouble())) },
+                    onCommit = { update(config.copy(undervoltageVolts = it.toDouble())) },
                 )
             }
         }
     }
 }
 
+/**
+ * Nível de alarme: interruptor à direita (desligado = não dispara), valor em
+ * destaque e slider — que fica inativo enquanto o nível está desligado.
+ */
+@Composable
+private fun AlarmLevel(
+    label: String,
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    unit: String,
+    decimals: Int = 0,
+    onCommit: (Float) -> Unit,
+) {
+    var local by remember(value) { mutableFloatStateOf(value) }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                label,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Text(
+                formatValue(local, decimals) + unit,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Spacer(Modifier.size(EucSpacing.sm))
+            Switch(checked = enabled, onCheckedChange = onEnabledChange)
+        }
+        Slider(
+            value = local,
+            onValueChange = { local = it },
+            onValueChangeFinished = { onCommit(local) },
+            valueRange = valueRange,
+            enabled = enabled,
+        )
+    }
+}

@@ -52,9 +52,14 @@ data class AlarmEvent(
 /**
  * Configuração dos alarmes. Valores em 0 desativam o alarme correspondente
  * quando isso faz sentido (corrente, tensões).
+ *
+ * Cada tipo pode ser desligado individualmente em [disabledTypes] — a UI mostra
+ * um interruptor por nível.
  */
 data class AlarmConfig(
     val enabled: Boolean = true,
+    /** Tipos desligados pelo usuário (liga/desliga por nível na tela de alarmes). */
+    val disabledTypes: Set<AlarmType> = emptySet(),
     val speedAlarm1Kmh: Double = 25.0,
     val speedAlarm2Kmh: Double = 30.0,
     val speedAlarm3Kmh: Double = 35.0,
@@ -78,7 +83,15 @@ data class AlarmConfig(
     val voiceEnabled: Boolean = true,
     /** Vibração do telefone. */
     val vibrationEnabled: Boolean = true,
-)
+) {
+    /** O tipo está ligado? (O alarme geral precisa estar ligado também.) */
+    fun isEnabled(type: AlarmType): Boolean = type !in disabledTypes
+
+    /** Liga/desliga um tipo, devolvendo uma configuração nova. */
+    fun withTypeEnabled(type: AlarmType, enabled: Boolean): AlarmConfig = copy(
+        disabledTypes = if (enabled) disabledTypes - type else disabledTypes + type,
+    )
+}
 
 /**
  * Avalia telemetria contra a configuração e produz alarmes.
@@ -119,6 +132,7 @@ class AlarmEngine(private val cooldownMillis: Long = DEFAULT_COOLDOWN_MILLIS) {
         nowMillis: Long,
     ): AlarmEvent? {
         if (!config.enabled || lastTelemetryAtMillis == 0L) return null
+        if (!config.isEnabled(AlarmType.CONNECTION_LOST)) return null
         val silentFor = nowMillis - lastTelemetryAtMillis
         if (silentFor < config.connectionLostAfterMillis) return null
         if (isCoolingDown(AlarmType.CONNECTION_LOST, nowMillis)) return null
@@ -143,17 +157,21 @@ class AlarmEngine(private val cooldownMillis: Long = DEFAULT_COOLDOWN_MILLIS) {
         config: AlarmConfig,
     ) {
         val speed = telemetry.speedKmh ?: return
+        // Níveis desligados não contam: o maior nível *ligado* atingido dispara,
+        // então desligar o nível 2 não silencia o nível 1.
         val levels = listOf(
             Triple(AlarmType.SPEED_1, config.speedAlarm1Kmh, AlarmPriority.LOW),
             Triple(AlarmType.SPEED_2, config.speedAlarm2Kmh, AlarmPriority.MEDIUM),
             Triple(AlarmType.SPEED_3, config.speedAlarm3Kmh, AlarmPriority.HIGH),
-        )
+        ).filter { config.isEnabled(it.first) }
         val reached = levels.lastOrNull { speed >= it.second }
         when {
             reached != null -> add(AlarmEvent(reached.first, reached.third, speed))
-            speed >= config.speedAlarm2Kmh - config.preAlarmMarginKmh ->
+            config.isEnabled(AlarmType.SPEED_PRE_2) &&
+                speed >= config.speedAlarm2Kmh - config.preAlarmMarginKmh ->
                 add(AlarmEvent(AlarmType.SPEED_PRE_2, AlarmPriority.LOW, speed))
-            speed >= config.speedAlarm1Kmh - config.preAlarmMarginKmh ->
+            config.isEnabled(AlarmType.SPEED_PRE_1) &&
+                speed >= config.speedAlarm1Kmh - config.preAlarmMarginKmh ->
                 add(AlarmEvent(AlarmType.SPEED_PRE_1, AlarmPriority.LOW, speed))
         }
 
@@ -169,6 +187,7 @@ class AlarmEngine(private val cooldownMillis: Long = DEFAULT_COOLDOWN_MILLIS) {
         telemetry: world.euc.protocol.model.WheelTelemetry,
         config: AlarmConfig,
     ) {
+        if (!config.isEnabled(AlarmType.CURRENT)) return
         val current = telemetry.currentAmps?.let { kotlin.math.abs(it) } ?: return
         if (config.currentAlarmAmps > 0 && current >= config.currentAlarmAmps) {
             add(AlarmEvent(AlarmType.CURRENT, AlarmPriority.MEDIUM, current))
@@ -179,6 +198,7 @@ class AlarmEngine(private val cooldownMillis: Long = DEFAULT_COOLDOWN_MILLIS) {
         telemetry: world.euc.protocol.model.WheelTelemetry,
         config: AlarmConfig,
     ) {
+        if (!config.isEnabled(AlarmType.TEMPERATURE)) return
         val temperatures = telemetry.temperatures ?: return
         val hottest = listOfNotNull(
             temperatures.mosfet,
@@ -199,10 +219,14 @@ class AlarmEngine(private val cooldownMillis: Long = DEFAULT_COOLDOWN_MILLIS) {
         config: AlarmConfig,
     ) {
         val voltage = telemetry.voltageVolts ?: return
-        if (config.overvoltageVolts > 0 && voltage >= config.overvoltageVolts) {
+        if (config.isEnabled(AlarmType.OVERVOLTAGE) &&
+            config.overvoltageVolts > 0 && voltage >= config.overvoltageVolts
+        ) {
             add(AlarmEvent(AlarmType.OVERVOLTAGE, AlarmPriority.MEDIUM, voltage))
         }
-        if (config.undervoltageVolts > 0 && voltage <= config.undervoltageVolts) {
+        if (config.isEnabled(AlarmType.UNDERVOLTAGE) &&
+            config.undervoltageVolts > 0 && voltage <= config.undervoltageVolts
+        ) {
             add(AlarmEvent(AlarmType.UNDERVOLTAGE, AlarmPriority.HIGH, voltage))
         }
     }
@@ -211,6 +235,7 @@ class AlarmEngine(private val cooldownMillis: Long = DEFAULT_COOLDOWN_MILLIS) {
         telemetry: world.euc.protocol.model.WheelTelemetry,
         config: AlarmConfig,
     ) {
+        if (!config.isEnabled(AlarmType.BATTERY)) return
         val battery = telemetry.batteryPercent ?: return
         if (config.batteryAlarmPercent > 0 && battery <= config.batteryAlarmPercent) {
             add(AlarmEvent(AlarmType.BATTERY, AlarmPriority.MEDIUM, battery))
@@ -221,6 +246,7 @@ class AlarmEngine(private val cooldownMillis: Long = DEFAULT_COOLDOWN_MILLIS) {
         telemetry: world.euc.protocol.model.WheelTelemetry,
         config: AlarmConfig,
     ) {
+        if (!config.isEnabled(AlarmType.SAFETY_MARGIN)) return
         val margin = telemetry.safetyMarginPercent ?: return
         if (config.safetyMarginAlarmPercent > 0 && margin <= config.safetyMarginAlarmPercent) {
             add(AlarmEvent(AlarmType.SAFETY_MARGIN, AlarmPriority.HIGH, margin))

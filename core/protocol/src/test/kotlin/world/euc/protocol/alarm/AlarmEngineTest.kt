@@ -156,6 +156,70 @@ class AlarmEngineTest {
         assertEquals(null, repeated)
     }
 
+    @Test
+    fun `nível de velocidade desligado deixa o nível anterior assumir`() {
+        val semNivel2 = config.withTypeEnabled(AlarmType.SPEED_2, false)
+
+        val events = AlarmEngine().evaluate(telemetry(speedKmh = 31.0), semNivel2, nowMillis = 0)
+
+        assertEquals(listOf(AlarmType.SPEED_1), events.map { it.type })
+        assertEquals(AlarmPriority.LOW, events.first().priority)
+    }
+
+    @Test
+    fun `todos os níveis de velocidade desligados não disparam nada`() {
+        val semVelocidade = config
+            .withTypeEnabled(AlarmType.SPEED_1, false)
+            .withTypeEnabled(AlarmType.SPEED_2, false)
+            .withTypeEnabled(AlarmType.SPEED_3, false)
+            .withTypeEnabled(AlarmType.SPEED_PRE_1, false)
+            .withTypeEnabled(AlarmType.SPEED_PRE_2, false)
+
+        val events = AlarmEngine().evaluate(telemetry(speedKmh = 36.0), semVelocidade, nowMillis = 0)
+
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun `nível desligado não reaparece ao desligar e religar a configuração`() {
+        val desligado = config.withTypeEnabled(AlarmType.SPEED_3, false)
+
+        assertTrue(!desligado.isEnabled(AlarmType.SPEED_3))
+        assertTrue(desligado.isEnabled(AlarmType.SPEED_2))
+        assertTrue(desligado.withTypeEnabled(AlarmType.SPEED_3, true).isEnabled(AlarmType.SPEED_3))
+    }
+
+    @Test
+    fun `alarme de bateria desligado não dispara`() {
+        val semBateria = config.withTypeEnabled(AlarmType.BATTERY, false)
+
+        val events = AlarmEngine().evaluate(telemetry(batteryPercent = 10.0), semBateria, nowMillis = 0)
+
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun `alarme de conexão desligado não dispara`() {
+        val semConexao = config.withTypeEnabled(AlarmType.CONNECTION_LOST, false)
+
+        val event = AlarmEngine().evaluateConnection(
+            lastTelemetryAtMillis = 1_000,
+            config = semConexao,
+            nowMillis = 20_000,
+        )
+
+        assertEquals(null, event)
+    }
+
+    @Test
+    fun `alarme geral desligado ignora os níveis individuais ligados`() {
+        val desligado = config.copy(enabled = false)
+
+        val events = AlarmEngine().evaluate(telemetry(speedKmh = 40.0), desligado, nowMillis = 0)
+
+        assertTrue(events.isEmpty())
+    }
+
     private fun telemetry(
         speedKmh: Double? = null,
         speedLimitKmh: Double? = null,
