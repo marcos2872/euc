@@ -137,7 +137,12 @@ fun TimeSeriesChart(
                 rememberLineCartesianLayer(
                     lineProvider = LineCartesianLayer.LineProvider.series(line),
                 ),
-                startAxis = VerticalAxis.rememberStart(valueFormatter = valueFormatter),
+                startAxis = VerticalAxis.rememberStart(
+                    valueFormatter = valueFormatter,
+                    // Rótulos de valor dentro da área do gráfico: o desenho ocupa
+                    // a largura toda e os horários abaixo alinham com as bordas.
+                    horizontalLabelPosition = VerticalAxis.HorizontalLabelPosition.Inside,
+                ),
                 bottomAxis = HorizontalAxis.rememberBottom(
                     // Os rótulos de hora são desenhados por nós, logo abaixo do
                     // gráfico, alinhados às bordas (o Vico centraliza o primeiro
