@@ -133,7 +133,9 @@ fun TimeSeriesChart(
         val itemPlacer = remember(labelStepMillis) {
             HorizontalAxis.ItemPlacer.aligned(
                 spacing = { labelStepMillis },
-                offset = { labelStepMillis / 2 },
+                // Rótulos nas posições dos dados: o primeiro cai exatamente no
+                // início do gráfico (e o último perto do fim). Sem recuo e sem
+                // deslocar os extremos, que era o que sobrepunha os vizinhos.
                 addExtremeLabelPadding = false,
             )
         }
