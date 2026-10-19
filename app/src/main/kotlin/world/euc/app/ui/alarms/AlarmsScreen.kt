@@ -107,9 +107,15 @@ fun AlarmsScreen(
                     checked = config.isEnabled(AlarmType.CONNECTION_LOST),
                     description = "Avisa quando a telemetria para de chegar (roda desligada ou fora de alcance).",
                 ) { enabled -> setEnabled(AlarmType.CONNECTION_LOST, enabled) }
+                val connectionAlarmEnabled = config.isEnabled(AlarmType.CONNECTION_LOST)
                 SliderRow(
                     label = "Tempo sem dados",
-                    description = "Quanto tempo sem leitura dispara o aviso de conexão perdida.",
+                    description = if (connectionAlarmEnabled) {
+                        "Quanto tempo sem leitura dispara o aviso de conexão perdida."
+                    } else {
+                        "Ligue o aviso de conexão para ajustar."
+                    },
+                    enabled = connectionAlarmEnabled,
                     value = (config.connectionLostAfterMillis / 1000f),
                     valueRange = 3f..30f,
                     unit = " s",
@@ -174,7 +180,12 @@ fun AlarmsScreen(
                 }
                 SliderRow(
                     label = "Margem do limite da roda",
-                    description = "Distância (km/h) do tiltback em que o aviso dispara.",
+                    description = if (config.speedLimitAlarmEnabled) {
+                        "Distância (km/h) do tiltback em que o aviso dispara."
+                    } else {
+                        "Ligue o alarme do limite para ajustar."
+                    },
+                    enabled = config.speedLimitAlarmEnabled,
                     value = config.speedLimitMarginKmh.toFloat(),
                     valueRange = 0f..10f,
                     unit = " km/h",
